@@ -1,0 +1,14 @@
+# Secrets and per-user state. None of this belongs in version control.
+.env
+tokens.json
+state.json
+
+# Generated drafts are personal working files, not source.
+drafts/
+
+# Your real activity log holds personal work notes. Keep it local; the repo
+# ships activity_log.example.md as the template to copy from.
+activity_log.md
+
+__pycache__/
+*.pyc
