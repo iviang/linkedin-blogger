@@ -8,9 +8,7 @@ import json
 import re
 from datetime import datetime
 
-from anthropic import Anthropic
-
-from . import config
+from . import config, llm
 
 _GAP_MARKER = re.compile(r"\[(?:YOUR|GAP)[^\]]*\]", re.IGNORECASE)
 _JSON_FENCE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
@@ -69,21 +67,8 @@ Rules:
 grammar, formatting, factualness, length."""
 
 
-def _client() -> Anthropic:
-    config.require("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY)
-    return Anthropic(api_key=config.ANTHROPIC_API_KEY)
-
-
 def _ask(system: str, user: str, max_tokens: int = 2048) -> str:
-    message = _client().messages.create(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    # Sonnet 5 uses adaptive thinking, so content[0] can be a ThinkingBlock. Take the
-    # first text block instead of assuming position 0.
-    return next((b.text for b in message.content if b.type == "text"), "").strip()
+    return llm.ask(system, user, max_tokens)
 
 
 def _parse_json(text: str):

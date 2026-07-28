@@ -8,9 +8,7 @@ with the owner's activity log since the last live post.
 import re
 from datetime import datetime, timezone
 
-from anthropic import Anthropic
-
-from . import config, github_activity, state
+from . import config, github_activity, llm, state
 
 _DATE_HEADING = re.compile(r"^##\s*(\d{4}-\d{2}-\d{2})\b", re.MULTILINE)
 
@@ -93,8 +91,6 @@ def activity_since(since: datetime | None) -> str:
 
 def synthesize_agent_log(since: datetime | None) -> str:
     """Ask Claude to write readable agent_log.md content from GitHub facts and notes."""
-    config.require("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY)
-
     github_data = _fetch_github(since)
     github_text = _format_github_facts(github_data)
     notes = _read_agent_notes()
@@ -106,16 +102,7 @@ def synthesize_agent_log(since: datetime | None) -> str:
     user_parts.append("")
     user_parts.append("Write the agent log markdown.")
 
-    client = Anthropic(api_key=config.ANTHROPIC_API_KEY)
-    message = client.messages.create(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=2048,
-        system=_SYNTHESIS_SYSTEM,
-        messages=[{"role": "user", "content": "\n".join(user_parts)}],
-    )
-    # Sonnet 5 uses adaptive thinking, so content[0] can be a ThinkingBlock. Take the
-    # first text block instead of assuming position 0.
-    return next((b.text for b in message.content if b.type == "text"), "").strip()
+    return llm.ask(_SYNTHESIS_SYSTEM, "\n".join(user_parts), max_tokens=2048)
 
 
 def build_reference(since: datetime | None, agent_log_text: str) -> str:

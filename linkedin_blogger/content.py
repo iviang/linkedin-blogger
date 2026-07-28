@@ -7,9 +7,7 @@ reference.md instead. This module remains for the quick `draft` command.
 import re
 from datetime import datetime, timedelta
 
-from anthropic import Anthropic
-
-from . import config
+from . import config, llm
 
 # Activity entries are expected as "## YYYY-MM-DD" headings followed by notes.
 _DATE_HEADING = re.compile(r"^##\s*(\d{4}-\d{2}-\d{2})\b", re.MULTILINE)
@@ -60,22 +58,8 @@ metrics, results, or names. If the notes are thin, write a shorter post.
 
 def draft_post(activity: str) -> str:
     """Ask Claude to draft the post from the activity slice."""
-    config.require("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY)
-    client = Anthropic(api_key=config.ANTHROPIC_API_KEY)
-
-    message = client.messages.create(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=1024,
-        system=_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": f"Here are my activity notes for the period:\n\n{activity}\n\n"
-                "Write the LinkedIn post.",
-            }
-        ],
+    user = (
+        f"Here are my activity notes for the period:\n\n{activity}\n\n"
+        "Write the LinkedIn post."
     )
-    # A single text block is expected for this prompt.
-    # Sonnet 5 uses adaptive thinking, so content[0] can be a ThinkingBlock. Take the
-    # first text block instead of assuming position 0.
-    return next((b.text for b in message.content if b.type == "text"), "").strip()
+    return llm.ask(_SYSTEM_PROMPT, user, max_tokens=1024)
