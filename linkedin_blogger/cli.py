@@ -248,6 +248,8 @@ def cmd_preview(args):
         print(f"last error: {meta['publish_error']}")
     check = processing.load_check(args.id)
     if check:
+        if processing.check_is_stale(args.id, body):
+            print(f"Note: draft changed since this check. Re-run: python blogger.py check {args.id}")
         print(processing.format_check(check))
     elif meta.get("flow") == "stage_b":
         print("No error check yet. Run: python blogger.py check", args.id)
@@ -330,6 +332,11 @@ def cmd_approve(args):
             f"python blogger.py check {args.id}"
         )
     if meta.get("flow") == "stage_b":
+        if processing.check_is_stale(args.id, body):
+            raise SystemExit(
+                f"Draft {args.id} changed since its last check. Re-run: "
+                f"python blogger.py check {args.id}"
+            )
         ok, message = processing.check_ready_for_approve(args.id)
         if not ok:
             raise SystemExit(message)

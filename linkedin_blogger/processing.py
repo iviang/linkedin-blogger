@@ -4,6 +4,7 @@ All drafting reads reference.md (from Stage A ingest). Nothing invents facts bey
 what the reference contains.
 """
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -113,6 +114,18 @@ def save_check(draft_id: str, result: dict) -> None:
     check_path(draft_id).write_text(json.dumps(result, indent=2), encoding="utf-8")
 
 
+def _body_sha(body: str) -> str:
+    return hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
+
+
+def check_is_stale(draft_id: str, body: str) -> bool:
+    """True when a saved check exists but the draft body has changed since it ran."""
+    check = load_check(draft_id)
+    if not check or "body_sha" not in check:
+        return False
+    return check["body_sha"] != _body_sha(body)
+
+
 def has_unfilled_gaps(body: str) -> bool:
     return bool(_GAP_MARKER.search(body))
 
@@ -180,7 +193,7 @@ def run_check(reference: str, draft_body: str) -> dict:
             flags.append(gap)
 
     passed = bool(result.get("passed")) and not gap_flags
-    return {"passed": passed, "flags": flags}
+    return {"passed": passed, "flags": flags, "body_sha": _body_sha(draft_body)}
 
 
 def apply_override(draft_id: str, flag_id: str, reason: str = "") -> dict:
