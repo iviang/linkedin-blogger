@@ -25,24 +25,30 @@ def build_message(prepared: bool) -> EmailMessage:
     msg["From"] = config.NUDGE_FROM
     msg["To"] = config.NUDGE_TO
 
-    intro = "Your weekly LinkedIn post workflow is ready when you are."
     if prepared:
         intro = (
-            "Reference material was refreshed from your logs and GitHub activity. "
-            "Your weekly LinkedIn post workflow is ready when you are."
+            "It has been about a week since your last post. Your reference material was just "
+            "refreshed from your logs and GitHub activity, so you can skip step 1 and start at "
+            "brainstorm."
         )
+    else:
+        intro = "It has been about a week since your last post. Time to write the next one."
 
     body = f"""{intro}
 
-Suggested steps:
-  1. python blogger.py brainstorm
-  2. python blogger.py select <number>
-  3. python blogger.py skeleton
-  4. Fill the gaps, then python blogger.py check <id>
-  5. python blogger.py approve <id> --at <when-you-want-it-live>
-  6. Scheduled posts publish automatically when due (run publish on a timer)
+Run these from the linkedin-blogger folder, using your virtualenv's python (ID and N are
+placeholders you replace, no angle brackets):
 
-Nothing publishes without your approval.
+  1. python blogger.py ingest        gather notes and GitHub activity since your last post
+  2. python blogger.py brainstorm    get a few post ideas
+  3. python blogger.py select N      pick one (add --comment "direction"), or reshuffle
+  4. python blogger.py skeleton      draft with fill-in gaps
+  5. fill every [YOUR VOICE: ...] gap in the draft file, then:
+  6. python blogger.py check ID      check grammar, length, and factual claims
+  7. python blogger.py attach ID path/to/image.png    optional photo
+  8. python blogger.py approve ID --at 2026-01-01T09:00:00-08:00    queue it for a time
+
+Scheduled posts publish automatically when due. Nothing publishes without your approval.
 """
     msg.set_content(body)
     return msg
