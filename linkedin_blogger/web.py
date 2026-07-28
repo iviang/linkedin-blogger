@@ -10,11 +10,14 @@ import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, request, send_from_directory
+from flask import Flask, request, send_file, send_from_directory
+from werkzeug.utils import secure_filename
 
 from . import agent_log, config, drafts, processing, queue, state
 
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
+UPLOADS_DIR = config.DRAFTS_DIR / "uploads"  # under gitignored drafts/, so photos never get committed
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif"}
 
 
 def guarded(view):
@@ -170,6 +173,7 @@ def create_app() -> Flask:
             "body": body,
             "scheduled_at": meta.get("scheduled_at"),
             "media": meta.get("media"),
+            "media_alt": meta.get("media_alt", ""),
             "check": processing.load_check(draft_id),
             "check_stale": processing.check_is_stale(draft_id, body),
             "has_gaps": processing.has_unfilled_gaps(body),
@@ -198,6 +202,8 @@ def create_app() -> Flask:
             return {"error": "Missing body."}, 400
         if "title" in data:
             meta["idea_title"] = (data.get("title") or "").strip()
+        if "media_alt" in data and meta.get("media"):
+            meta["media_alt"] = (data.get("media_alt") or "").strip()
         # A body edit invalidates any prior check; check_is_stale surfaces that until re-run.
         drafts.write_draft(meta, new_body, path)
         return _draft_detail(draft_id)
@@ -313,6 +319,113 @@ def create_app() -> Flask:
             return {"error": "Posting frequency must be between 1 and 365 days."}, 400
         state.set_post_interval_days(days)
         return {"post_interval_days": days}
+
+    # --- Stage 3c: media, and publishing ---
+
+    @app.post("/api/drafts/<draft_id>/media")
+    @guarded
+    def api_draft_media_upload(draft_id):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        queue.assert_editable(meta)
+        upload = request.files.get("file")
+        if not upload or not upload.filename:
+            return {"error": "No file selected."}, 400
+        ext = Path(upload.filename).suffix.lower()
+        if ext not in ALLOWED_IMAGE_EXTS:
+            return {"error": f"Unsupported image type {ext or '(none)'}. Use JPG, PNG, or GIF."}, 400
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        safe = secure_filename(upload.filename) or f"image{ext}"
+        dest = UPLOADS_DIR / f"{draft_id}-{safe}"
+        upload.save(dest)
+        meta["media"] = dest.relative_to(config.BASE_DIR).as_posix()
+        alt = (request.form.get("alt") or "").strip()
+        if alt:
+            meta["media_alt"] = alt
+        drafts.write_draft(meta, body, path)
+        return _draft_detail(draft_id)
+
+    @app.delete("/api/drafts/<draft_id>/media")
+    @guarded
+    def api_draft_media_remove(draft_id):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        queue.assert_editable(meta)
+        meta.pop("media", None)
+        meta.pop("media_alt", None)
+        drafts.write_draft(meta, body, path)
+        return _draft_detail(draft_id)
+
+    @app.get("/api/drafts/<draft_id>/media")
+    def api_draft_media_get(draft_id):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, _body = drafts.read_draft(path)
+        raw = meta.get("media")
+        if not raw:
+            return {"error": "No media on this draft."}, 404
+        abspath = (config.BASE_DIR / raw).resolve()
+        base = config.BASE_DIR.resolve()
+        # Only ever serve files under the project root, never an arbitrary path from meta.
+        if base not in abspath.parents or not abspath.exists():
+            return {"error": "Media file missing."}, 404
+        return send_file(abspath)
+
+    def _publish_one(draft_id: str, path):
+        """Shared publish for a single draft file. Returns (ok, error_or_None)."""
+        meta, body = drafts.read_draft(path)
+
+        def write_draft(updated_meta, updated_body):
+            drafts.write_draft(updated_meta, updated_body, path)
+
+        ok = queue.publish_draft(meta, body, write_draft)
+        if ok:
+            return True, None
+        after, _ = drafts.read_draft(path)
+        return False, after.get("publish_error", "Publish failed.")
+
+    @app.post("/api/drafts/<draft_id>/publish")
+    @guarded
+    def api_draft_publish(draft_id):
+        """Publish one draft right now, bypassing its scheduled time (a deliberate post-now)."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        status = meta.get("status")
+        if status in ("posted", "posting"):
+            return {"error": f"Draft is already {status}."}, 400
+        if status == "skeleton":
+            return {"error": "Fill the gaps and run check before publishing."}, 400
+        if meta.get("flow") == "stage_b":
+            if processing.check_is_stale(draft_id, body):
+                return {"error": "Draft changed since its last check. Run check again first."}, 400
+            ready, message = processing.check_ready_for_approve(draft_id)
+            if not ready:
+                return {"error": message}, 400
+        ok, error = _publish_one(draft_id, path)
+        return {"ok": ok, "error": error, "draft": _draft_detail(draft_id)}
+
+    @app.post("/api/publish")
+    @guarded
+    def api_publish_due():
+        """Publish every draft whose scheduled time has arrived. Mirrors `blogger.py publish`."""
+        published, failed, results = 0, 0, []
+        for path in sorted(config.DRAFTS_DIR.glob("*.md")):
+            meta, _body = drafts.read_draft(path)
+            if not queue.ready_to_publish(meta):
+                continue
+            draft_id = meta.get("id", path.stem)
+            ok, error = _publish_one(draft_id, path)
+            results.append({"id": draft_id, "ok": ok, "error": error})
+            published += 1 if ok else 0
+            failed += 0 if ok else 1
+        return {"published": published, "failed": failed, "results": results}
 
     return app
 
