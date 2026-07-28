@@ -33,8 +33,11 @@ LINKEDIN_SCOPES = "openid profile w_member_social"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
-# How far back to look for activity when drafting a new post.
+# How far back to look for activity when drafting a new post (legacy draft command).
 DRAFT_LOOKBACK_DAYS = int(os.getenv("DRAFT_LOOKBACK_DAYS", "7"))
+
+# Stage B: how many ideas Claude brainstorms before the owner picks one.
+BRAINSTORM_IDEA_COUNT = int(os.getenv("BRAINSTORM_IDEA_COUNT", "3"))
 
 # --- Ingestion: GitHub agent log (Stage A) ---
 # Read-only PAT (fine-grained, Contents: Read is enough) so private repos are visible.
@@ -49,6 +52,17 @@ GITHUB_REPOS = [r.strip() for r in os.getenv("GITHUB_REPOS", "").split(",") if r
 AGENT_NOTES = BASE_DIR / "agent_notes.md"     # freeform milestones/errors/next steps you add
 AGENT_LOG = BASE_DIR / "agent_log.md"         # generated: readable synthesis of GitHub + notes
 REFERENCE_FILE = BASE_DIR / "reference.md"    # generated: merged activity + agent log since last post
+
+# Stage C: publish queue lock window (minutes before scheduled_at when edits stop).
+QUEUE_LOCK_MINUTES = int(os.getenv("QUEUE_LOCK_MINUTES", "15"))
+
+# Stage C: weekly email nudge over SMTP (Gmail app password works).
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+NUDGE_FROM = os.getenv("NUDGE_FROM")
+NUDGE_TO = os.getenv("NUDGE_TO")
 
 
 def require(name: str, value):

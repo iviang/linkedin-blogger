@@ -28,5 +28,5 @@ owner approves, on a weekly schedule. Human-in-the-loop by design.
 ## Current status
 
 See docs/DESIGN.md "Build status". Working: login, activity fetch, basic draft/approve/
-publish. Next: Stage A step 2 (agent log synthesis + reference.md), then Processing, then
-the publish queue and weekly nudge.
+publish. Working: ingest (Stage A step 2), Processing (Stage B), Deliverable queue
+(Stage C). Pipeline complete for v1.

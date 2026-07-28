@@ -1,9 +1,7 @@
-"""Turn recent activity-log entries into a drafted LinkedIn post using Claude.
+"""Legacy one-shot drafting from activity_log.md.
 
-The activity log is the single source of truth. The prompt is deliberately strict
-about only using what is written there, so the post reports real work and does not
-invent achievements. That honesty rule is a Kool Quarters non-negotiable, and it
-matters double when the output is public and posted under your name.
+Stage B processing (brainstorm, skeleton, error check) lives in processing.py and reads
+reference.md instead. This module remains for the quick `draft` command.
 """
 
 import re

@@ -34,3 +34,13 @@ def set_last_posted_at(when: datetime) -> None:
     state = load()
     state["last_posted_at"] = when.astimezone(timezone.utc).isoformat(timespec="seconds")
     save(state)
+
+
+def get_processing() -> dict:
+    return load().get("processing", {})
+
+
+def save_processing(processing: dict) -> None:
+    state = load()
+    state["processing"] = processing
+    save(state)

@@ -61,9 +61,13 @@ linkedin-blogger/
     config.py                settings from .env; BASE_DIR is the repo root
     auth.py                  LinkedIn OAuth (login, token refresh, member URN)
     linkedin.py              publish to the LinkedIn Posts API
-    content.py               drafting (to be reworked into the brainstorm/skeleton flow)
+    content.py               legacy one-shot draft from activity_log.md
+    processing.py            Stage B: brainstorm, skeleton, error-check loop
+    queue.py                 Stage C: scheduled queue, lock, reliable publish
+    nudge.py                 Stage C: weekly email reminder
     state.py                 state.json helpers, incl. last_posted_at
-    github_activity.py       fetch commits + PRs for configured repos (Stage A)
+    github_activity.py       fetch commits + PRs for configured repos (Stage A step 1)
+    agent_log.py             synthesize agent_log.md + merge reference.md (Stage A step 2)
   docs/                      privacy.html (Pages), pipeline.svg, this file
   activity_log.example.md    template; real activity_log.md is gitignored
 ```
@@ -78,17 +82,14 @@ Data files (`.env`, `tokens.json`, `state.json`, `activity_log.md`, `agent_notes
 - LinkedIn OAuth login (`login`)
 - Draft from a single `activity_log.md` (`draft`), review/list/show/approve, publish text
 - GitHub activity fetch and preview (`activity`) — Stage A step 1
+- Agent log synthesis and reference merge (`ingest`) — Stage A step 2
+- Processing (`brainstorm`, `select`, `reshuffle`, `skeleton`, `check`, `override`,
+  `preview`, `approve`) — Stage B
+- Deliverable queue (`queue`, `schedule`, `attach`, `retry`, `publish`, `nudge`) — Stage C
 
 **Next up**
 
-- Stage A step 2: Claude synthesizes GitHub activity + `agent_notes.md` into a readable
-  `agent_log.md`, then merges it with `activity_log.md` into `reference.md` (since-last-post
-  window).
-- Stage B (Processing): multi-idea brainstorm with select/reshuffle, skeleton-with-gaps,
-  the error-check loop and preview.
-- Stage C (Deliverable): publish queue with the 15-minute lock, weekly email nudge, media
-  attachment. Make the posted-vs-failed state bulletproof (a draft is only `posted` when
-  LinkedIn confirms it).
+- Hardening: recover drafts stuck in `posting` after a crash; optional video media.
 
 ## Prerequisites and secrets (in `.env`)
 
@@ -97,7 +98,7 @@ Data files (`.env`, `tokens.json`, `state.json`, `activity_log.md`, `agent_notes
 - `ANTHROPIC_API_KEY`
 - `GITHUB_TOKEN` (read-only fine-grained PAT: Contents + Pull requests read),
   `GITHUB_REPOS` (comma-separated `owner/repo`)
-- `SMTP` / Gmail app password for the weekly nudge (planned)
+- `SMTP` / Gmail app password for the weekly nudge
 
 ## Guardrails
 
