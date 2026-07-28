@@ -10,6 +10,8 @@ from pathlib import Path
 
 from flask import Flask, send_from_directory
 
+from . import config, drafts, state
+
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
 
 
@@ -23,6 +25,34 @@ def create_app() -> Flask:
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/status")
+    def api_status():
+        last = state.get_last_posted_at()
+        items = drafts.list_drafts()
+        queued = [d for d in items if d["status"] in ("queued", "approved", "failed")]
+        return {
+            "last_posted_at": last.isoformat() if last else None,
+            "reference_exists": config.REFERENCE_FILE.exists(),
+            "repos": config.GITHUB_REPOS,
+            "draft_count": len(items),
+            "queued_count": len(queued),
+        }
+
+    @app.get("/api/drafts")
+    def api_drafts():
+        return {"drafts": drafts.list_drafts()}
+
+    @app.get("/api/queue")
+    def api_queue():
+        queued = [d for d in drafts.list_drafts() if d["status"] in ("queued", "approved", "failed")]
+        return {"queue": queued}
+
+    @app.get("/api/reference")
+    def api_reference():
+        if not config.REFERENCE_FILE.exists():
+            return {"exists": False, "content": ""}
+        return {"exists": True, "content": config.REFERENCE_FILE.read_text(encoding="utf-8")}
 
     return app
 
