@@ -7,12 +7,12 @@ select, skeleton) so the browser can drive the pipeline the CLI already implemen
 
 import functools
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, request, send_from_directory
 
-from . import agent_log, config, drafts, processing, state
+from . import agent_log, config, drafts, processing, queue, state
 
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
 
@@ -149,6 +149,170 @@ def create_app() -> Flask:
             drafts.draft_path(draft_id),
         )
         return {"id": draft_id, "body": body}
+
+    # --- Stage 3b: edit a draft, run its check, override flags ---
+
+    def _draft_detail(draft_id: str) -> dict | None:
+        """Full editor payload for one draft: body, status, check, and edit-lock state."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return None
+        meta, body = drafts.read_draft(path)
+        try:
+            queue.assert_editable(meta)
+            editable, lock_reason = True, ""
+        except SystemExit as exc:
+            editable, lock_reason = False, str(exc)
+        return {
+            "id": meta.get("id", draft_id),
+            "status": meta.get("status", "?"),
+            "title": meta.get("idea_title", ""),
+            "body": body,
+            "scheduled_at": meta.get("scheduled_at"),
+            "media": meta.get("media"),
+            "check": processing.load_check(draft_id),
+            "check_stale": processing.check_is_stale(draft_id, body),
+            "has_gaps": processing.has_unfilled_gaps(body),
+            "editable": editable,
+            "lock_reason": lock_reason,
+        }
+
+    @app.get("/api/drafts/<draft_id>")
+    def api_draft_get(draft_id):
+        detail = _draft_detail(draft_id)
+        if detail is None:
+            return {"error": "No draft with that id."}, 404
+        return detail
+
+    @app.post("/api/drafts/<draft_id>")
+    @guarded
+    def api_draft_save(draft_id):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, _body = drafts.read_draft(path)
+        queue.assert_editable(meta)  # locked/posted -> SystemExit -> guarded 400
+        data = request.get_json(silent=True) or {}
+        new_body = data.get("body")
+        if new_body is None:
+            return {"error": "Missing body."}, 400
+        if "title" in data:
+            meta["idea_title"] = (data.get("title") or "").strip()
+        # A body edit invalidates any prior check; check_is_stale surfaces that until re-run.
+        drafts.write_draft(meta, new_body, path)
+        return _draft_detail(draft_id)
+
+    @app.post("/api/drafts/<draft_id>/check")
+    @guarded
+    def api_draft_check(draft_id):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        if meta.get("status") in ("posted", "posting"):
+            return {"error": "That draft is already posted."}, 400
+        reference = processing.load_reference()
+        result = processing.run_check(reference, body)
+        processing.save_check(draft_id, result)
+        if result["passed"] and meta.get("status") == "skeleton":
+            meta["status"] = "pending"
+            drafts.write_draft(meta, body, path)
+        return _draft_detail(draft_id)
+
+    @app.post("/api/drafts/<draft_id>/override")
+    @guarded
+    def api_draft_override(draft_id):
+        data = request.get_json(silent=True) or {}
+        flag_id = data.get("flag_id")
+        if not flag_id:
+            return {"error": "Missing flag_id."}, 400
+        check = processing.apply_override(draft_id, flag_id, data.get("reason") or "")
+        if check.get("passed"):
+            path = drafts.draft_path(draft_id)
+            meta, body = drafts.read_draft(path)
+            if meta.get("status") == "skeleton":
+                meta["status"] = "pending"
+                drafts.write_draft(meta, body, path)
+        return _draft_detail(draft_id)
+
+    @app.delete("/api/drafts/<draft_id>")
+    @guarded
+    def api_draft_delete(draft_id):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, _body = drafts.read_draft(path)
+        if meta.get("status") in ("posted", "posting"):
+            return {"error": "A posted draft is the record of that post and cannot be deleted here."}, 400
+        drafts.delete_draft(draft_id)
+        return {"ok": True}
+
+    @app.post("/api/drafts/<draft_id>/schedule")
+    @guarded
+    def api_draft_schedule(draft_id):
+        """Queue or reschedule a draft for a given time. Mirrors the CLI approve/schedule
+        rules: a stage_b draft must pass its check before its first scheduling."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        data = request.get_json(silent=True) or {}
+        when = data.get("scheduled_at")
+
+        meta, body = drafts.read_draft(path)
+        status = meta.get("status")
+        if status in ("posted", "posting"):
+            return {"error": f"Draft is {status} and cannot be scheduled."}, 400
+        if status == "skeleton":
+            return {"error": "Fill the gaps and run check before scheduling."}, 400
+        queue.assert_editable(meta)  # locked -> SystemExit -> guarded 400
+
+        # First-time scheduling of a checked draft must actually be ready; rescheduling one
+        # that is already queued/approved/failed just moves the time.
+        if status not in ("queued", "approved", "failed") and meta.get("flow") == "stage_b":
+            if processing.check_is_stale(draft_id, body):
+                return {"error": "Draft changed since its last check. Run check again first."}, 400
+            ready, message = processing.check_ready_for_approve(draft_id)
+            if not ready:
+                return {"error": message}, 400
+
+        # No time given means "space it after the queue": land it one interval after the
+        # latest already-scheduled post (or the last live post), else schedule for now.
+        scheduled = queue.parse_scheduled_at(when) if when else _default_schedule(draft_id)
+        meta.update(queue.queue_meta(scheduled))
+        drafts.write_draft(meta, body, path)
+        return _draft_detail(draft_id)
+
+    def _default_schedule(exclude_id: str) -> datetime:
+        interval = timedelta(days=state.get_post_interval_days())
+        anchors = []
+        for item in drafts.list_drafts():
+            if item["id"] == exclude_id:
+                continue
+            if item["status"] in ("queued", "approved") and item.get("scheduled_at"):
+                anchors.append(queue.parse_scheduled_at(item["scheduled_at"]))
+        last_posted = state.get_last_posted_at()
+        if last_posted:
+            anchors.append(last_posted)
+        if anchors:
+            return max(anchors) + interval
+        return datetime.now().astimezone()
+
+    @app.get("/api/settings")
+    def api_settings_get():
+        return {"post_interval_days": state.get_post_interval_days()}
+
+    @app.post("/api/settings")
+    @guarded
+    def api_settings_save():
+        data = request.get_json(silent=True) or {}
+        try:
+            days = int(data.get("post_interval_days"))
+        except (TypeError, ValueError):
+            return {"error": "Enter a whole number of days."}, 400
+        if days < 1 or days > 365:
+            return {"error": "Posting frequency must be between 1 and 365 days."}, 400
+        state.set_post_interval_days(days)
+        return {"post_interval_days": days}
 
     return app
 

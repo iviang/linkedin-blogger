@@ -39,6 +39,11 @@ DRAFT_LOOKBACK_DAYS = int(os.getenv("DRAFT_LOOKBACK_DAYS", "7"))
 # Stage B: how many ideas Claude brainstorms before the owner picks one.
 BRAINSTORM_IDEA_COUNT = int(os.getenv("BRAINSTORM_IDEA_COUNT", "3"))
 
+# Default days between scheduled posts. Used when a draft is queued without an explicit
+# time: it lands this many days after the last post already in the queue. This is only the
+# default; the owner can change it in the UI (stored in state.json), which wins over this.
+POST_INTERVAL_DAYS = int(os.getenv("POST_INTERVAL_DAYS", "7"))
+
 # --- Ingestion: GitHub agent log (Stage A) ---
 # Read-only PAT (fine-grained, Contents: Read is enough) so private repos are visible.
 # Public repos work without a token but hit tighter unauthenticated rate limits.

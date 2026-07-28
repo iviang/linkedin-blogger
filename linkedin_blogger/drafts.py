@@ -31,6 +31,22 @@ def write_draft(meta: dict, body: str, path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def delete_draft(draft_id: str) -> bool:
+    """Move a draft and its check file into drafts/trash/ instead of unlinking, so a
+    mistaken delete is recoverable. Returns False when the draft does not exist.
+    """
+    path = draft_path(draft_id)
+    if not path.exists():
+        return False
+    trash = config.DRAFTS_DIR / "trash"
+    trash.mkdir(parents=True, exist_ok=True)
+    path.replace(trash / path.name)
+    check = config.DRAFTS_DIR / f"{draft_id}.check.json"
+    if check.exists():
+        check.replace(trash / check.name)
+    return True
+
+
 def read_draft(path):
     text = path.read_text(encoding="utf-8")
     meta = {}

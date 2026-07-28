@@ -68,6 +68,37 @@
   #skeletonBtn { margin-top: 10px; }
   .count.busy { color: var(--navy); }
   .count.err { color: var(--warn-ink); }
+
+  .row[data-id] { cursor: pointer; }
+  .row[data-id]:hover { background: var(--raise); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(10,14,18,.5); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; z-index: 50; }
+  .overlay.open { display: flex; }
+  .editor { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 680px; box-shadow: 0 20px 60px rgba(0,0,0,.28); }
+  .ehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .ehead h2 { font-size: 14px; margin: 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .ebody { padding: 16px 18px; }
+  .elabel { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+  .etitle { width: 100%; font: inherit; font-size: 14px; font-weight: 600; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); margin-bottom: 14px; }
+  .epost { width: 100%; font: inherit; font-size: 14px; line-height: 1.55; padding: 11px 12px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); resize: vertical; min-height: 220px; }
+  .eactions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .grow { flex: 1 1 160px; }
+  .note { font-size: 12.5px; color: var(--muted); }
+  .note.busy { color: var(--navy); }
+  .note.warn { color: var(--warn-ink); }
+  .note.ok { color: var(--ok-ink); }
+  .lock { font-size: 12.5px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 8px; padding: 8px 11px; margin-bottom: 12px; }
+  .flags { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .flag { border: 1px solid var(--line2); border-radius: 9px; padding: 10px 12px; }
+  .flag.ovr { opacity: .55; }
+  .flag-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .flag-cat { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn-ink); }
+  .flag-msg { font-size: 13px; margin-top: 5px; }
+  .flag-ex { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; }
+  .btn.danger { border-color: var(--warn-ink); color: var(--warn-ink); }
+  .btn.danger:hover { background: var(--warn-bg); border-color: var(--warn-ink); }
+  .sched { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .etime { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); }
 </style>
 </head>
 <body>
@@ -98,6 +129,19 @@
     </section>
 
     <section class="panel">
+      <div class="phead"><h2>Settings</h2></div>
+      <div class="list">
+        <label class="elabel" for="freq">Post every N days (default when you queue a post without a time)</label>
+        <div class="eactions">
+          <input class="etime" id="freq" type="number" min="1" max="365" style="width: 84px;">
+          <span class="note">days</span>
+          <button class="btn" id="freqSave">Save</button>
+          <span class="note grow" id="freqNote"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
       <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
       <div class="list" id="drafts"><p class="empty">Loading&hellip;</p></div>
     </section>
@@ -112,7 +156,38 @@
       <pre class="ref" id="reference" hidden></pre>
     </section>
 
-    <p class="foot">Ingest, brainstorm, and skeleton run here. Filling gaps, checking, and publishing still run from the CLI for now. Stop the server with <code>Ctrl+C</code>.</p>
+    <p class="foot">Ingest, brainstorm, skeleton, editing, and checking run here. Approve and publish still run from the CLI for now. Stop the server with <code>Ctrl+C</code>.</p>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="editor" role="dialog" aria-modal="true" aria-label="Edit draft">
+      <div class="ehead">
+        <h2 id="eId">Draft</h2>
+        <button class="btn" id="eClose">Close</button>
+      </div>
+      <div class="ebody">
+        <div class="lock" id="eLock" hidden></div>
+        <label class="elabel" for="eTitle">Title</label>
+        <input class="etitle" id="eTitle" type="text">
+        <label class="elabel" for="ePost">Post body</label>
+        <textarea class="epost" id="ePost" spellcheck="true"></textarea>
+        <div class="eactions">
+          <button class="btn primary" id="eSave">Save</button>
+          <button class="btn" id="eCheck">Run check</button>
+          <span class="note grow" id="eNote"></span>
+        </div>
+        <div class="flags" id="eFlags"></div>
+        <div class="sched">
+          <label class="elabel" for="eWhen">Schedule</label>
+          <div class="eactions">
+            <input class="etime" id="eWhen" type="datetime-local">
+            <button class="btn" id="eSchedule">Set schedule</button>
+            <button class="btn danger" id="eDelete">Delete</button>
+            <span class="note grow" id="eSchedNote"></span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -144,7 +219,7 @@
       if (!items.length) { el.innerHTML = '<p class="empty">' + emptyMsg + "</p>"; return; }
       el.innerHTML = items.map(function (it) {
         var sched = it.scheduled_at ? '<div class="row-sched">' + new Date(it.scheduled_at).toLocaleString() + "</div>" : "";
-        return '<div class="row"><div class="row-main"><div class="row-t">' +
+        return '<div class="row" data-id="' + esc(it.id) + '"><div class="row-main"><div class="row-t">' +
           esc(it.title || "(untitled)") + " " + pill(it.status) + '</div><div class="row-p">' +
           esc(it.preview) + '&hellip;</div></div><div class="row-meta"><div class="row-id">' +
           esc(it.id) + "</div>" + sched + "</div></div>";
@@ -264,6 +339,27 @@
       }
     });
 
+    function freqNote(text, cls) {
+      var el = document.getElementById("freqNote");
+      el.textContent = text || "";
+      el.className = "note grow" + (cls ? " " + cls : "");
+    }
+    async function loadSettings() {
+      try {
+        var s = await getJSON("/api/settings");
+        document.getElementById("freq").value = s.post_interval_days;
+      } catch (e) { /* ignore; server not reachable */ }
+    }
+    document.getElementById("freqSave").addEventListener("click", async function () {
+      var val = document.getElementById("freq").value;
+      freqNote("Saving…", "busy");
+      try {
+        var s = await postJSON("/api/settings", { post_interval_days: parseInt(val, 10) });
+        document.getElementById("freq").value = s.post_interval_days;
+        freqNote("Saved. New posts default to " + s.post_interval_days + " days apart.", "ok");
+      } catch (e) { freqNote(e.message, "warn"); }
+    });
+
     async function loadIdeas() {
       try {
         var r = await getJSON("/api/ideas");
@@ -273,6 +369,215 @@
         }
       } catch (e) { /* no session yet; ignore */ }
     }
+
+    // --- Stage 3b/3c: draft editor ---
+    var currentDraftId = null;
+    var currentStatus = null;
+    var saveTimer = null;
+
+    function eNote(text, cls) {
+      var el = document.getElementById("eNote");
+      el.textContent = text || "";
+      el.className = "note grow" + (cls ? " " + cls : "");
+    }
+    function eSchedNote(text, cls) {
+      var el = document.getElementById("eSchedNote");
+      el.textContent = text || "";
+      el.className = "note grow" + (cls ? " " + cls : "");
+    }
+    function pad2(n) { return String(n).padStart(2, "0"); }
+    // datetime-local gives naive local time; send it with the browser's real offset so the
+    // server stores the instant the owner meant, not the same wall-clock read as UTC.
+    function toISOWithOffset(localValue) {
+      var d = new Date(localValue);
+      var off = -d.getTimezoneOffset();
+      var sign = off >= 0 ? "+" : "-";
+      var abs = Math.abs(off);
+      return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+        "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":00" +
+        sign + pad2(Math.floor(abs / 60)) + ":" + pad2(abs % 60);
+    }
+    function toLocalInput(iso) {
+      var d = new Date(iso);
+      return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+        "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    }
+
+    function renderCheck(detail) {
+      var flags = document.getElementById("eFlags");
+      var check = detail.check;
+      if (detail.check_stale) {
+        eNote("Body changed since the last check. Run check again.", "warn");
+      } else if (!check) {
+        eNote(detail.has_gaps ? "Fill every [YOUR VOICE] gap, then run check." : "Not checked yet.");
+      } else if (check.passed) {
+        eNote("Check passed. Ready to approve from the CLI.", "ok");
+      } else {
+        eNote("Check found issues. Edit the draft, or override what you accept.", "warn");
+      }
+      if (!check || !check.flags || !check.flags.length) { flags.innerHTML = ""; return; }
+      flags.innerHTML = check.flags.map(function (f) {
+        var ovr = f.overridden;
+        return '<div class="flag' + (ovr ? " ovr" : "") + '"><div class="flag-top"><span class="flag-cat">' +
+          esc(f.category || "") + "</span>" +
+          (ovr ? '<span class="note ok">overridden</span>'
+               : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>') +
+          '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
+          (f.excerpt ? '<div class="flag-ex">' + esc(f.excerpt) + "</div>" : "") + "</div>";
+      }).join("");
+      Array.prototype.forEach.call(flags.querySelectorAll("button[data-flag]"), function (btn) {
+        btn.addEventListener("click", function () { overrideFlag(this.getAttribute("data-flag")); });
+      });
+    }
+
+    function fillEditor(detail) {
+      currentDraftId = detail.id;
+      currentStatus = detail.status;
+      document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
+      document.getElementById("eTitle").value = detail.title || "";
+      document.getElementById("ePost").value = detail.body || "";
+      var lock = document.getElementById("eLock");
+      var ro = !detail.editable;
+      if (ro) { lock.textContent = detail.lock_reason || "This draft cannot be edited."; lock.hidden = false; }
+      else { lock.hidden = true; }
+      document.getElementById("eTitle").disabled = ro;
+      document.getElementById("ePost").readOnly = ro;
+      document.getElementById("eSave").disabled = ro;
+      document.getElementById("eCheck").disabled = ro;
+      renderCheck(detail);
+
+      // Schedule + delete
+      var when = document.getElementById("eWhen");
+      when.value = detail.scheduled_at ? toLocalInput(detail.scheduled_at) : "";
+      when.disabled = ro;
+      var queued = detail.status === "queued" || detail.status === "approved" || detail.status === "failed";
+      var schedBtn = document.getElementById("eSchedule");
+      schedBtn.textContent = queued ? "Update schedule" : "Set schedule";
+      schedBtn.disabled = ro;
+      document.getElementById("eDelete").disabled =
+        detail.status === "posted" || detail.status === "posting";
+      eSchedNote(detail.scheduled_at
+        ? "Currently " + new Date(detail.scheduled_at).toLocaleString()
+        : "Not scheduled. Leave the time empty to auto-space it after the queue.");
+    }
+
+    async function openEditor(id) {
+      document.getElementById("overlay").classList.add("open");
+      document.getElementById("eFlags").innerHTML = "";
+      eNote("Loading…", "busy");
+      try {
+        var detail = await getJSON("/api/drafts/" + encodeURIComponent(id));
+        if (detail.error) throw new Error(detail.error);
+        fillEditor(detail);
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    function closeEditor() {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushSave(); }
+      document.getElementById("overlay").classList.remove("open");
+      currentDraftId = null;
+    }
+
+    async function saveDraft() {
+      return postJSON("/api/drafts/" + encodeURIComponent(currentDraftId), {
+        body: document.getElementById("ePost").value,
+        title: document.getElementById("eTitle").value,
+      });
+    }
+
+    // Autosave: a debounced write on idle. It does not re-render the editor (that would
+    // fight the cursor while typing); it just persists and refreshes the lists.
+    function scheduleAutosave() {
+      if (saveTimer) clearTimeout(saveTimer);
+      eNote("Editing…");
+      saveTimer = setTimeout(flushSave, 900);
+    }
+    async function flushSave() {
+      saveTimer = null;
+      if (!currentDraftId) return;
+      try {
+        await saveDraft();
+        eNote("Saved. Re-run check if you changed the wording.", "ok");
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+    document.getElementById("ePost").addEventListener("input", scheduleAutosave);
+    document.getElementById("eTitle").addEventListener("input", scheduleAutosave);
+
+    document.getElementById("eClose").addEventListener("click", closeEditor);
+    document.getElementById("overlay").addEventListener("click", function (e) {
+      if (e.target === this) closeEditor();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && document.getElementById("overlay").classList.contains("open")) closeEditor();
+    });
+
+    document.getElementById("eSave").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      this.disabled = true;
+      eNote("Saving…", "busy");
+      try { fillEditor(await saveDraft()); load(); }
+      catch (e) { eNote(e.message, "warn"); }
+      finally { this.disabled = false; }
+    });
+
+    document.getElementById("eCheck").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      this.disabled = true;
+      eNote("Checking against reference…", "busy");
+      try {
+        await saveDraft(); // check the text on screen, not a stale file
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/check", {}));
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+      finally { this.disabled = false; }
+    });
+
+    async function overrideFlag(flagId) {
+      if (!currentDraftId) return;
+      eNote("Overriding…", "busy");
+      try {
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/override",
+          { flag_id: flagId }));
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    document.getElementById("eSchedule").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      var raw = document.getElementById("eWhen").value;
+      this.disabled = true;
+      eSchedNote(raw ? "Scheduling…" : "Auto-scheduling after the queue…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        var payload = raw ? { scheduled_at: toISOWithOffset(raw) } : {};
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/schedule", payload));
+        load();
+      } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    document.getElementById("eDelete").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      if (!window.confirm("Move draft " + currentDraftId + " to trash? You can recover it from drafts/trash.")) return;
+      this.disabled = true;
+      eSchedNote("Deleting…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        var r = await fetch("/api/drafts/" + encodeURIComponent(currentDraftId), { method: "DELETE" });
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+        currentDraftId = null; // stop closeEditor from flushing a save for a deleted draft
+        closeEditor();
+        load();
+      } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    ["drafts", "queue"].forEach(function (id) {
+      document.getElementById(id).addEventListener("click", function (e) {
+        var row = e.target.closest(".row[data-id]");
+        if (row) openEditor(row.getAttribute("data-id"));
+      });
+    });
 
     document.getElementById("refBtn").addEventListener("click", async function () {
       var pre = document.getElementById("reference");
@@ -286,6 +591,7 @@
 
     load();
     loadIdeas();
+    loadSettings();
   </script>
 </body>
 </html>

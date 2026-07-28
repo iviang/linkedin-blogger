@@ -57,3 +57,16 @@ def save_processing(processing: dict) -> None:
     state = load()
     state["processing"] = processing
     save(state)
+
+
+def get_post_interval_days() -> int:
+    """Days between scheduled posts. The owner's saved setting wins over the config default."""
+    return int(load().get("settings", {}).get("post_interval_days", config.POST_INTERVAL_DAYS))
+
+
+def set_post_interval_days(days: int) -> None:
+    state = load()
+    settings = state.get("settings", {})
+    settings["post_interval_days"] = int(days)
+    state["settings"] = settings
+    save(state)
