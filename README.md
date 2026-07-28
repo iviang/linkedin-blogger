@@ -6,7 +6,7 @@ automation and human-computer interaction (HCI) principles.
 A personal tool that drafts LinkedIn posts from your work notes and publishes the ones you
 approve, on a weekly schedule. You stay the author: the automation handles the gathering,
 ideating, and posting, while every judgment call stays with you. Posts go to your personal
-profile through LinkedIn's official API, never by scraping.
+profile through LinkedIn's official API.
 
 ## The pipeline
 
@@ -98,8 +98,7 @@ You can edit a draft file in `drafts/` directly before approving, including chan
 
 ## Notes and limits
 
-- **Official API only.** No browser automation or scraping, which would break LinkedIn's
-  User Agreement and risk your account.
+- **Official API only.** No browser automation or scraping involved.
 - **Tokens expire.** Member access tokens last about 60 days. With member-token refresh
   enabled on the app, the tool refreshes automatically; otherwise run `login` again.
 - **`LINKEDIN_API_VERSION`** is a monthly `YYYYMM` value. If the API returns a 426
