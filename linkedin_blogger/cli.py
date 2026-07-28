@@ -18,7 +18,7 @@ import argparse
 import sys
 from datetime import datetime
 
-from . import auth, config, content, linkedin
+from . import auth, config, content, github_activity, linkedin, state
 
 # Minimal front-matter format so we avoid a YAML dependency. The block is fenced by
 # lines of three dashes; everything after the closing fence is the post body.
@@ -96,6 +96,25 @@ def cmd_list(_args):
         print(f"[{meta.get('status', '?'):8}] {meta.get('id', path.stem)}  {preview}...")
 
 
+def cmd_activity(_args):
+    since = state.get_last_posted_at()
+    window = f"since {since.date()}" if since else "recent (no prior post recorded yet)"
+    repos = ", ".join(config.GITHUB_REPOS) or "(none configured, set GITHUB_REPOS in .env)"
+    print(f"GitHub activity {window}")
+    print(f"Repos: {repos}\n")
+
+    data = github_activity.fetch_activity(since)
+
+    print(f"Commits ({len(data['commits'])}):")
+    for c in data["commits"]:
+        print(f"  [{c['repo']}] {c['date']}  {c['message']}")
+    print(f"\nPull requests ({len(data['pulls'])}):")
+    for p in data["pulls"]:
+        print(f"  [{p['repo']}] #{p['number']} ({p['state']})  {p['title']}")
+    if not data["commits"] and not data["pulls"]:
+        print("\nNo activity found. Check GITHUB_REPOS and that the token can read them.")
+
+
 def _find_draft(draft_id: str):
     path = config.DRAFTS_DIR / f"{draft_id}.md"
     if not path.exists():
@@ -151,6 +170,7 @@ def main(argv=None):
     sub.add_parser("login", help="Authorize with LinkedIn in the browser (one time).").set_defaults(func=cmd_login)
     sub.add_parser("draft", help="Generate a pending draft from recent activity.").set_defaults(func=cmd_draft)
     sub.add_parser("list", help="List all drafts and their status.").set_defaults(func=cmd_list)
+    sub.add_parser("activity", help="Preview GitHub activity since your last post.").set_defaults(func=cmd_activity)
 
     show = sub.add_parser("show", help="Print one draft in full.")
     show.add_argument("id")

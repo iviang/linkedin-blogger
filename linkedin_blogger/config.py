@@ -36,6 +36,20 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 # How far back to look for activity when drafting a new post.
 DRAFT_LOOKBACK_DAYS = int(os.getenv("DRAFT_LOOKBACK_DAYS", "7"))
 
+# --- Ingestion: GitHub agent log (Stage A) ---
+# Read-only PAT (fine-grained, Contents: Read is enough) so private repos are visible.
+# Public repos work without a token but hit tighter unauthenticated rate limits.
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+# Comma-separated "owner/repo" entries the agent log tracks, e.g.
+# GITHUB_REPOS=iviang/linkedin-blogger,iviang/Strscout
+GITHUB_REPOS = [r.strip() for r in os.getenv("GITHUB_REPOS", "").split(",") if r.strip()]
+
+# Ingestion working files, all gitignored, kept at the repo root.
+AGENT_NOTES = BASE_DIR / "agent_notes.md"     # freeform milestones/errors/next steps you add
+AGENT_LOG = BASE_DIR / "agent_log.md"         # generated: readable synthesis of GitHub + notes
+REFERENCE_FILE = BASE_DIR / "reference.md"    # generated: merged activity + agent log since last post
+
 
 def require(name: str, value):
     """Fail loudly and early when a required setting is missing, rather than

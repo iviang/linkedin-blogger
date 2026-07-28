@@ -1,0 +1,36 @@
+"""Per-user state in state.json (shared with auth.py, which stores the member URN).
+
+The key value here is `last_posted_at`: the timestamp of the most recent live post, which
+is the start of the window ingestion collects from. Stored as a timezone-aware UTC ISO
+string so it compares cleanly against GitHub's UTC timestamps.
+"""
+
+import json
+from datetime import datetime, timezone
+
+from . import config
+
+
+def load() -> dict:
+    if config.STATE_FILE.exists():
+        return json.loads(config.STATE_FILE.read_text(encoding="utf-8"))
+    return {}
+
+
+def save(state: dict) -> None:
+    # Read-modify-write preserves keys other code owns (e.g. auth's member_urn).
+    config.STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def get_last_posted_at() -> datetime | None:
+    raw = load().get("last_posted_at")
+    return datetime.fromisoformat(raw) if raw else None
+
+
+def set_last_posted_at(when: datetime) -> None:
+    # Normalize to aware UTC so downstream comparisons never mix naive and aware.
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    state = load()
+    state["last_posted_at"] = when.astimezone(timezone.utc).isoformat(timespec="seconds")
+    save(state)

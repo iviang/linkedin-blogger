@@ -10,5 +10,10 @@ drafts/
 # ships activity_log.example.md as the template to copy from.
 activity_log.md
 
+# Ingestion working files: personal notes and generated output. Kept local.
+agent_notes.md
+agent_log.md
+reference.md
+
 __pycache__/
 *.pyc

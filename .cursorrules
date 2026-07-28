@@ -1,0 +1,32 @@
+# Project rules for AI assistants (Cursor, etc.)
+
+Read docs/DESIGN.md first: it holds the full pipeline design, decisions, and current status.
+
+## What this is
+
+A single-user tool that drafts LinkedIn posts from work notes and publishes the ones the
+owner approves, on a weekly schedule. Human-in-the-loop by design.
+
+## Non-negotiables
+
+- Official LinkedIn API only. Never scrape or browser-automate LinkedIn.
+- Nothing publishes without human approval. The weekly job only drafts and notifies.
+- Posts use only what is in the logs. Never invent achievements or metrics.
+- Secrets live in the gitignored .env. Never commit .env, tokens.json, or state.json.
+  Do not run `git add .` or `git add -A`; stage named files only.
+- Never run destructive git commands (force-push, hard reset, rebase) without being asked.
+
+## Conventions
+
+- Python 3.10+. Package layout under linkedin_blogger/; run via `python blogger.py <cmd>`
+  or `python -m linkedin_blogger`.
+- config.py reads everything from .env; BASE_DIR is the repo root (data files live there).
+- Keep functions small and focused. Comments explain why, not what.
+- No em dashes in prose or comments; straight quotes; no emoji.
+- When adding behavior, add or update the relevant docs/DESIGN.md status line.
+
+## Current status
+
+See docs/DESIGN.md "Build status". Working: login, activity fetch, basic draft/approve/
+publish. Next: Stage A step 2 (agent log synthesis + reference.md), then Processing, then
+the publish queue and weekly nudge.
