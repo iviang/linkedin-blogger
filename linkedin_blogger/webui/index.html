@@ -50,6 +50,24 @@
   .ref { margin: 0; padding: 16px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); border-top: 1px solid var(--line); background: var(--raise); max-height: 340px; overflow: auto; }
   .foot { font-size: 12px; color: var(--muted); margin-top: 22px; }
   code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--navy-soft); color: var(--navy); padding: 1px 6px; border-radius: 5px; }
+
+  .btn.primary { background: var(--navy); color: #F5F3EC; border-color: var(--navy); }
+  .btn.primary:hover { filter: brightness(1.06); border-color: var(--navy); }
+  .btn:disabled, .btn:disabled:hover { opacity: .5; cursor: default; border-color: var(--line2); filter: none; }
+  .flow { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0 2px; }
+  .ideas { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .idea { display: flex; gap: 10px; padding: 11px 12px; border: 1px solid var(--line2); border-radius: 9px; cursor: pointer; }
+  .idea:hover { border-color: var(--navy); }
+  .idea.sel { border-color: var(--navy); background: var(--navy-soft); }
+  .idea input { margin-top: 3px; flex: none; }
+  .idea-t { font-size: 13.5px; font-weight: 600; display: block; }
+  .idea-a { font-size: 12.5px; color: var(--muted); margin-top: 2px; display: block; }
+  .idea-r { font-size: 12px; color: var(--faint); margin-top: 3px; display: block; }
+  .dirlabel { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 4px; }
+  .dir { width: 100%; font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); resize: vertical; }
+  #skeletonBtn { margin-top: 10px; }
+  .count.busy { color: var(--navy); }
+  .count.err { color: var(--warn-ink); }
 </style>
 </head>
 <body>
@@ -61,6 +79,23 @@
       </div>
       <div class="chips" id="chips"><span class="chip">loading&hellip;</span></div>
     </header>
+
+    <section class="panel" id="newPost">
+      <div class="phead"><h2>New post</h2><span class="count" id="flowMsg"></span></div>
+      <div class="list">
+        <div class="flow">
+          <button class="btn" id="ingestBtn">1 &middot; Run ingest</button>
+          <button class="btn" id="brainstormBtn">2 &middot; Brainstorm ideas</button>
+          <button class="btn" id="reshuffleBtn" hidden>Reshuffle</button>
+        </div>
+        <div class="ideas" id="ideas"></div>
+        <div id="skeletonStep" hidden>
+          <label class="dirlabel" for="direction">Direction for the draft (optional)</label>
+          <textarea class="dir" id="direction" rows="2" placeholder="Any angle, emphasis, or tone to steer the skeleton"></textarea>
+          <button class="btn primary" id="skeletonBtn" disabled>3 &middot; Create skeleton draft</button>
+        </div>
+      </div>
+    </section>
 
     <section class="panel">
       <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
@@ -77,7 +112,7 @@
       <pre class="ref" id="reference" hidden></pre>
     </section>
 
-    <p class="foot">Stage 2: a live, read-only view of your pipeline. Actions (ingest, brainstorm, check, publish) come next. Stop the server with <code>Ctrl+C</code>.</p>
+    <p class="foot">Ingest, brainstorm, and skeleton run here. Filling gaps, checking, and publishing still run from the CLI for now. Stop the server with <code>Ctrl+C</code>.</p>
   </div>
 
   <script>
@@ -87,7 +122,22 @@
       });
     }
     async function getJSON(url) { const r = await fetch(url); return r.json(); }
+    async function postJSON(url, body) {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+      return data;
+    }
     function pill(status) { return '<span class="st ' + esc(status) + '">' + esc(status) + "</span>"; }
+    function flowMsg(text, cls) {
+      var el = document.getElementById("flowMsg");
+      el.textContent = text || "";
+      el.className = "count" + (cls ? " " + cls : "");
+    }
 
     function renderList(id, items, emptyMsg) {
       var el = document.getElementById(id);
@@ -123,6 +173,107 @@
       }
     }
 
+    var selectedIdea = null;
+
+    function renderIdeas(ideas, selIndex) {
+      var box = document.getElementById("ideas");
+      if (!ideas || !ideas.length) {
+        box.innerHTML = "";
+        document.getElementById("skeletonStep").hidden = true;
+        document.getElementById("reshuffleBtn").hidden = true;
+        return;
+      }
+      box.innerHTML = ideas.map(function (it, i) {
+        return '<label class="idea" data-i="' + i + '"><input type="radio" name="idea" value="' + i + '">' +
+          '<span><span class="idea-t">' + esc(it.title || "(untitled)") + "</span>" +
+          '<span class="idea-a">' + esc(it.angle || "") + "</span>" +
+          '<span class="idea-r">' + esc(it.rationale || "") + "</span></span></label>";
+      }).join("");
+      document.getElementById("skeletonStep").hidden = false;
+      document.getElementById("reshuffleBtn").hidden = false;
+
+      Array.prototype.forEach.call(box.querySelectorAll('input[name="idea"]'), function (input) {
+        input.addEventListener("change", function () {
+          selectedIdea = parseInt(this.value, 10);
+          Array.prototype.forEach.call(box.querySelectorAll(".idea"), function (l) { l.classList.remove("sel"); });
+          this.closest(".idea").classList.add("sel");
+          document.getElementById("skeletonBtn").disabled = false;
+        });
+      });
+
+      selectedIdea = (selIndex === 0 || selIndex) ? selIndex : null;
+      if (selectedIdea != null) {
+        var chosen = box.querySelector('.idea[data-i="' + selectedIdea + '"]');
+        if (chosen) { chosen.classList.add("sel"); chosen.querySelector("input").checked = true; }
+        document.getElementById("skeletonBtn").disabled = false;
+      } else {
+        document.getElementById("skeletonBtn").disabled = true;
+      }
+    }
+
+    async function runBrainstorm(reshuffle) {
+      flowMsg(reshuffle ? "Reshuffling ideas&hellip;" : "Brainstorming ideas&hellip;", "busy");
+      document.getElementById("brainstormBtn").disabled = true;
+      document.getElementById("reshuffleBtn").disabled = true;
+      try {
+        var r = await postJSON("/api/brainstorm", { reshuffle: !!reshuffle });
+        renderIdeas(r.ideas, null);
+        flowMsg(r.ideas.length + " ideas. Pick one, then create the skeleton.");
+      } catch (e) {
+        flowMsg(e.message, "err");
+      } finally {
+        document.getElementById("brainstormBtn").disabled = false;
+        document.getElementById("reshuffleBtn").disabled = false;
+      }
+    }
+
+    document.getElementById("ingestBtn").addEventListener("click", async function () {
+      this.disabled = true;
+      flowMsg("Collecting activity since your last post&hellip;", "busy");
+      try {
+        var r = await postJSON("/api/ingest");
+        flowMsg(r.since
+          ? "Reference rebuilt (since " + new Date(r.since).toLocaleDateString() + ")."
+          : "Reference rebuilt (all history, no prior post yet).");
+        load();
+      } catch (e) {
+        flowMsg(e.message, "err");
+      } finally {
+        this.disabled = false;
+      }
+    });
+
+    document.getElementById("brainstormBtn").addEventListener("click", function () { runBrainstorm(false); });
+    document.getElementById("reshuffleBtn").addEventListener("click", function () { runBrainstorm(true); });
+
+    document.getElementById("skeletonBtn").addEventListener("click", async function () {
+      if (selectedIdea == null) return;
+      this.disabled = true;
+      flowMsg("Writing skeleton draft&hellip;", "busy");
+      try {
+        await postJSON("/api/select", { index: selectedIdea, comment: document.getElementById("direction").value });
+        var r = await postJSON("/api/skeleton");
+        flowMsg("Draft " + r.id + " created. Fill the [YOUR VOICE] gaps, then run check.");
+        renderIdeas([], null);
+        document.getElementById("direction").value = "";
+        selectedIdea = null;
+        load();
+      } catch (e) {
+        flowMsg(e.message, "err");
+        this.disabled = false;
+      }
+    });
+
+    async function loadIdeas() {
+      try {
+        var r = await getJSON("/api/ideas");
+        if (r.ideas && r.ideas.length) {
+          renderIdeas(r.ideas, r.selected_index);
+          if (r.comments) document.getElementById("direction").value = r.comments;
+        }
+      } catch (e) { /* no session yet; ignore */ }
+    }
+
     document.getElementById("refBtn").addEventListener("click", async function () {
       var pre = document.getElementById("reference");
       var btn = this;
@@ -134,6 +285,7 @@
     });
 
     load();
+    loadIdeas();
   </script>
 </body>
 </html>

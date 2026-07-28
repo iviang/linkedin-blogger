@@ -1,11 +1,34 @@
-"""Read draft files (front matter + body). Shared by the web UI so it does not duplicate
-the CLI's parsing. Front matter is a block fenced by lines of three dashes; everything
-after the closing fence is the body.
+"""Read and write draft files (front matter + body). Shared by the web UI so it does not
+duplicate the CLI's parsing. Front matter is a block fenced by lines of three dashes;
+everything after the closing fence is the body.
 """
+
+from datetime import datetime
 
 from . import config
 
 FENCE = "---"
+
+
+def draft_path(draft_id: str):
+    return config.DRAFTS_DIR / f"{draft_id}.md"
+
+
+def new_draft_id() -> str:
+    return datetime.now().strftime("%Y-%m-%d-%H%M%S")
+
+
+def write_draft(meta: dict, body: str, path) -> None:
+    """Write front matter + body. Mirrors the CLI's format so both agree on the file shape."""
+    config.DRAFTS_DIR.mkdir(exist_ok=True)
+    lines = [FENCE]
+    for key, value in meta.items():
+        lines.append(f"{key}: {value}")
+    lines.append(FENCE)
+    lines.append("")
+    lines.append(body.strip())
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def read_draft(path):
