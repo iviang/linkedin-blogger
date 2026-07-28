@@ -437,6 +437,12 @@ def cmd_nudge(args):
     nudge.send_nudge(prepare=args.prepare, force=args.force)
 
 
+def cmd_serve(args):
+    # Imported lazily so the CLI works without Flask installed unless you use the web UI.
+    from . import web
+    web.run(port=args.port, open_browser=not args.no_browser)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Draft and publish LinkedIn posts from work notes.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -534,6 +540,11 @@ def main(argv=None):
         help="Send even if not due yet (for testing).",
     )
     nudge_cmd.set_defaults(func=cmd_nudge)
+
+    serve = sub.add_parser("serve", help="Run the local web interface at localhost.")
+    serve.add_argument("--port", type=int, default=5000, help="Port to serve on (default 5000).")
+    serve.add_argument("--no-browser", action="store_true", help="Do not open a browser window.")
+    serve.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)
     args.func(args)

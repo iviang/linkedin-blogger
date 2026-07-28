@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkedIn Blogger</title>
+<style>
+  :root { --bg:#F4F6F7; --surface:#fff; --ink:#19212A; --muted:#586069; --line:#E4E7EA;
+          --navy:#16324F; --navy-soft:#E7EEF4; --ok:#1D9E75; --ok-bg:#E6F5EF; --ok-ink:#0F6E56; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161A; --surface:#1A2027; --ink:#E8EBEE; --muted:#A3ABB3; --line:#2A313A;
+            --navy:#8FB8DC; --navy-soft:#1E2B39; --ok:#46C79C; --ok-bg:#123528; --ok-ink:#7FE0BF; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg);
+         color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; max-width: 520px; width: 100%; padding: 32px; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .tile { width: 40px; height: 40px; border-radius: 10px; background: var(--navy); color: #F5F3EC; display: grid; place-items: center; font-weight: 700; }
+  h1 { font-size: 19px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ok-ink); background: var(--ok-bg); border-radius: 999px; padding: 5px 12px; margin-bottom: 20px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  li { display: flex; gap: 10px; font-size: 14px; align-items: baseline; }
+  li .mark { color: var(--ok); font-weight: 700; }
+  li .todo { color: var(--muted); }
+  li small { color: var(--muted); }
+  .foot { margin-top: 22px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--navy-soft); color: var(--navy); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <div class="tile">VN</div>
+      <div><h1>LinkedIn Blogger</h1><p class="sub">running locally on your machine</p></div>
+    </div>
+    <span class="status"><span class="dot"></span> Server running</span>
+    <ul>
+      <li><span class="mark">&#10003;</span> <span>Local Flask server <small>&mdash; you are looking at it</small></span></li>
+      <li><span class="todo">&#9711;</span> <span>Live drafts, reference, and queue <small>&mdash; next stage</small></span></li>
+      <li><span class="todo">&#9711;</span> <span>Ingest, brainstorm, check, publish actions <small>&mdash; next stage</small></span></li>
+    </ul>
+    <p class="foot">Stage 1: the server skeleton. The full interface wires up next. Stop the server with <code>Ctrl+C</code>.</p>
+  </main>
+</body>
+</html>
