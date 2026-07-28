@@ -6,7 +6,7 @@ only marked posted after LinkedIn returns a post URN.
 
 from datetime import datetime, timedelta, timezone
 
-from . import config, drafts, linkedin, state
+from . import config, drafts, linkedin, media, state
 
 # Statuses the owner can still edit (when not within the lock window).
 EDITABLE = {"pending", "skeleton", "approved", "queued", "failed"}
@@ -85,7 +85,7 @@ def resolve_media(meta: dict) -> list[dict]:
         path = config.BASE_DIR / item["path"]
         if not path.exists():
             raise SystemExit(f"Media file not found: {path}")
-        resolved.append({"path": path, "alt": item.get("alt", "")})
+        resolved.append({"path": path, "alt": item.get("alt", ""), "kind": media.kind(path)})
     return resolved
 
 
@@ -96,10 +96,10 @@ def publish_draft(meta: dict, body: str, write_draft) -> bool:
     meta["status"] = "posting"
     write_draft(meta, body)
 
-    images = resolve_media(meta)
+    items = resolve_media(meta)
 
     try:
-        urn = linkedin.publish_post(body, images=images)
+        urn = linkedin.publish_post(body, media=items)
     except linkedin.PublishError as exc:
         meta["status"] = "failed"
         meta["publish_error"] = str(exc)

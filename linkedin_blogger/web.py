@@ -13,12 +13,11 @@ from pathlib import Path
 from flask import Flask, request, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 
-from . import agent_log, auth, config, drafts, llm, processing, queue, state
+from . import agent_log, auth, config, drafts, llm, media, processing, queue, state
 
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
 UPLOADS_DIR = config.DRAFTS_DIR / "uploads"  # under gitignored drafts/, so photos never get committed
 IMAGE_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif"}
-ALLOWED_IMAGE_EXTS = set(IMAGE_MEDIA_TYPES)
 
 # Two lanes on the dashboard. Once a draft is queued it leaves the Drafts list and lives in
 # the Queue; posted/posting drafts are done and show in neither.
@@ -192,13 +191,24 @@ def create_app() -> Flask:
             editable, lock_reason = True, ""
         except SystemExit as exc:
             editable, lock_reason = False, str(exc)
+        media_out = []
+        for item in drafts.get_media(meta):
+            file_path = config.BASE_DIR / item["path"]
+            media_out.append(
+                {
+                    "alt": item["alt"],
+                    "kind": media.kind(file_path),
+                    "warnings": media.warnings_for(file_path) if file_path.exists() else [],
+                }
+            )
         return {
             "id": meta.get("id", draft_id),
             "status": meta.get("status", "?"),
             "title": meta.get("idea_title", ""),
             "body": body,
             "scheduled_at": meta.get("scheduled_at"),
-            "media": [{"alt": m["alt"]} for m in drafts.get_media(meta)],
+            "media": media_out,
+            "media_warnings": media.post_warnings([m["kind"] for m in media_out]),
             "check": processing.load_check(draft_id),
             "check_stale": processing.check_is_stale(draft_id, body),
             "has_gaps": processing.has_unfilled_gaps(body),
@@ -357,19 +367,19 @@ def create_app() -> Flask:
         uploads = [u for u in request.files.getlist("file") if u and u.filename]
         if not uploads:
             return {"error": "No file selected."}, 400
-        media = drafts.get_media(meta)
+        media_list = drafts.get_media(meta)
         UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
         for upload in uploads:
             ext = Path(upload.filename).suffix.lower()
-            if ext not in ALLOWED_IMAGE_EXTS:
-                return {"error": f"Unsupported image type {ext or '(none)'}. Use JPG, PNG, or GIF."}, 400
+            if ext not in media.ALLOWED_EXTS:
+                return {"error": f"Unsupported file type {ext or '(none)'}. Use JPG, PNG, GIF, or MP4."}, 400
             safe = secure_filename(upload.filename) or f"image{ext}"
-            # A microsecond stamp keeps names unique so a re-added photo never overwrites another.
+            # A microsecond stamp keeps names unique so a re-added file never overwrites another.
             stamp = datetime.now().strftime("%H%M%S%f")
             dest = UPLOADS_DIR / f"{draft_id}-{stamp}-{safe}"
             upload.save(dest)
-            media.append({"path": dest.relative_to(config.BASE_DIR).as_posix(), "alt": ""})
-        drafts.set_media(meta, media)
+            media_list.append({"path": dest.relative_to(config.BASE_DIR).as_posix(), "alt": ""})
+        drafts.set_media(meta, media_list)
         drafts.write_draft(meta, body, path)
         return _draft_detail(draft_id)
 
@@ -381,15 +391,15 @@ def create_app() -> Flask:
             return {"error": "No draft with that id."}, 404
         meta, body = drafts.read_draft(path)
         queue.assert_editable(meta)
-        media = drafts.get_media(meta)
-        if index < 0 or index >= len(media):
-            return {"error": "No photo at that position."}, 404
-        removed = media.pop(index)
+        media_list = drafts.get_media(meta)
+        if index < 0 or index >= len(media_list):
+            return {"error": "No item at that position."}, 404
+        removed = media_list.pop(index)
         try:  # best-effort file cleanup; a missing file is not an error
             (config.BASE_DIR / removed["path"]).unlink()
         except OSError:
             pass
-        drafts.set_media(meta, media)
+        drafts.set_media(meta, media_list)
         drafts.write_draft(meta, body, path)
         return _draft_detail(draft_id)
 
@@ -401,12 +411,12 @@ def create_app() -> Flask:
             return {"error": "No draft with that id."}, 404
         meta, body = drafts.read_draft(path)
         queue.assert_editable(meta)
-        media = drafts.get_media(meta)
-        if index < 0 or index >= len(media):
+        media_list = drafts.get_media(meta)
+        if index < 0 or index >= len(media_list):
             return {"error": "No photo at that position."}, 404
         data = request.get_json(silent=True) or {}
-        media[index]["alt"] = (data.get("alt") or "").strip()
-        drafts.set_media(meta, media)
+        media_list[index]["alt"] = (data.get("alt") or "").strip()
+        drafts.set_media(meta, media_list)
         drafts.write_draft(meta, body, path)
         return _draft_detail(draft_id)
 
@@ -419,19 +429,19 @@ def create_app() -> Flask:
             return {"error": "No draft with that id."}, 404
         meta, body = drafts.read_draft(path)
         queue.assert_editable(meta)
-        media = drafts.get_media(meta)
-        if index < 0 or index >= len(media):
+        media_list = drafts.get_media(meta)
+        if index < 0 or index >= len(media_list):
             return {"error": "No photo at that position."}, 404
-        abspath = (config.BASE_DIR / media[index]["path"]).resolve()
+        abspath = (config.BASE_DIR / media_list[index]["path"]).resolve()
         base = config.BASE_DIR.resolve()
         if base not in abspath.parents or not abspath.exists():
             return {"error": "Media file missing."}, 404
         media_type = IMAGE_MEDIA_TYPES.get(abspath.suffix.lower())
         if not media_type:
-            return {"error": "Unsupported image type for description."}, 400
+            return {"error": "Alt text descriptions are for photos, not videos."}, 400
         alt = llm.describe_image(abspath.read_bytes(), media_type)
-        media[index]["alt"] = alt
-        drafts.set_media(meta, media)
+        media_list[index]["alt"] = alt
+        drafts.set_media(meta, media_list)
         drafts.write_draft(meta, body, path)
         return {"index": index, "alt": alt}
 
@@ -441,10 +451,10 @@ def create_app() -> Flask:
         if not path.exists():
             return {"error": "No draft with that id."}, 404
         meta, _body = drafts.read_draft(path)
-        media = drafts.get_media(meta)
-        if index < 0 or index >= len(media):
-            return {"error": "No photo at that position."}, 404
-        abspath = (config.BASE_DIR / media[index]["path"]).resolve()
+        media_list = drafts.get_media(meta)
+        if index < 0 or index >= len(media_list):
+            return {"error": "No item at that position."}, 404
+        abspath = (config.BASE_DIR / media_list[index]["path"]).resolve()
         base = config.BASE_DIR.resolve()
         # Only ever serve files under the project root, never an arbitrary path from meta.
         if base not in abspath.parents or not abspath.exists():

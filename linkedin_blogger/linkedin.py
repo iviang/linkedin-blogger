@@ -13,6 +13,8 @@ from . import auth, config
 
 POSTS_URL = "https://api.linkedin.com/rest/posts"
 IMAGES_URL = "https://api.linkedin.com/rest/images?action=initializeUpload"
+VIDEOS_INIT_URL = "https://api.linkedin.com/rest/videos?action=initializeUpload"
+VIDEOS_FINALIZE_URL = "https://api.linkedin.com/rest/videos?action=finalizeUpload"
 
 _IMAGE_TYPES = {
     ".jpg": "image/jpeg",
@@ -77,6 +79,66 @@ def upload_image(image_path: Path) -> str:
     return image_urn
 
 
+def upload_video(video_path: Path) -> str:
+    """Upload a video via the Videos API and return its urn:li:video URN.
+
+    The API hands back one or more byte ranges to PUT (a single range for small files). We
+    upload each, collect the ETag it returns, then finalize with those part ids.
+    """
+    author = auth.get_member_urn()
+    headers = _api_headers()
+    size = video_path.stat().st_size
+
+    init_body = {
+        "initializeUploadRequest": {
+            "owner": author,
+            "fileSizeBytes": size,
+            "uploadCaptions": False,
+            "uploadThumbnail": False,
+        }
+    }
+    resp = requests.post(VIDEOS_INIT_URL, headers=headers, json=init_body, timeout=60)
+    if resp.status_code >= 400:
+        raise PublishError(resp.status_code, resp.text)
+
+    value = resp.json().get("value") or {}
+    video_urn = value.get("video")
+    instructions = value.get("uploadInstructions") or []
+    upload_token = value.get("uploadToken", "")
+    if not video_urn or not instructions:
+        raise PublishError(resp.status_code, f"Video upload init missing fields: {resp.text}")
+
+    etags = []
+    with open(video_path, "rb") as handle:
+        for step in instructions:
+            first, last = step["firstByte"], step["lastByte"]
+            handle.seek(first)
+            chunk = handle.read(last - first + 1)
+            put = requests.put(
+                step["uploadUrl"],
+                data=chunk,
+                headers={"Content-Type": "application/octet-stream"},
+                timeout=300,
+            )
+            if put.status_code >= 400:
+                raise PublishError(put.status_code, put.text)
+            etag = put.headers.get("ETag") or put.headers.get("etag")
+            if etag:
+                etags.append(etag.strip('"'))
+
+    finalize_body = {
+        "finalizeUploadRequest": {
+            "video": video_urn,
+            "uploadToken": upload_token,
+            "uploadedPartIds": etags,
+        }
+    }
+    fin = requests.post(VIDEOS_FINALIZE_URL, headers=headers, json=finalize_body, timeout=60)
+    if fin.status_code >= 400:
+        raise PublishError(fin.status_code, fin.text)
+    return video_urn
+
+
 def _image_entry(image: dict) -> dict:
     """Upload one image and return its {id, altText?} entry for the post body."""
     entry = {"id": upload_image(image["path"])}
@@ -86,11 +148,11 @@ def _image_entry(image: dict) -> dict:
     return entry
 
 
-def publish_post(text: str, images: list[dict] | None = None) -> str:
-    """Publish a post. `images` is a list of {path, alt}. Returns the post URN or raises.
+def publish_post(text: str, media: list[dict] | None = None) -> str:
+    """Publish a post. `media` is a list of {path, alt, kind}. Returns the post URN or raises.
 
-    LinkedIn uses `content.media` for a single image and `content.multiImage` for two or
-    more, so we pick the shape based on how many photos are attached.
+    LinkedIn holds either a single image (`content.media`), several images
+    (`content.multiImage`), or one video (`content.media` with a video URN), never a mix.
     """
     author = auth.get_member_urn()
     body = {
@@ -106,8 +168,16 @@ def publish_post(text: str, images: list[dict] | None = None) -> str:
         "isReshareDisabledByAuthor": False,
     }
 
-    images = images or []
-    if len(images) == 1:
+    media = media or []
+    videos = [m for m in media if m.get("kind") == "video"]
+    images = [m for m in media if m.get("kind") != "video"]
+    if videos:
+        if len(videos) > 1 or images:
+            raise PublishError(
+                None, "LinkedIn allows a single video and no other media in a post."
+            )
+        body["content"] = {"media": {"id": upload_video(videos[0]["path"])}}
+    elif len(images) == 1:
         body["content"] = {"media": _image_entry(images[0])}
     elif len(images) >= 2:
         body["content"] = {"multiImage": {"images": [_image_entry(i) for i in images]}}
@@ -124,4 +194,4 @@ def publish_post(text: str, images: list[dict] | None = None) -> str:
 
 def publish_text_post(text: str) -> str:
     """Backward-compatible wrapper for text-only posts."""
-    return publish_post(text, images=None)
+    return publish_post(text, media=None)

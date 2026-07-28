@@ -108,12 +108,14 @@
   .drop:hover, .drop.over { border-color: var(--navy); color: var(--navy); background: var(--navy-soft); }
   .gallery { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
   .gitem { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line2); border-radius: 10px; padding: 10px; }
-  .gitem img { width: 92px; height: 92px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line2); flex: none; }
+  .gitem img, .gitem video { width: 92px; height: 92px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line2); flex: none; background: #000; }
   .gcol { flex: 1; min-width: 0; }
+  .gwarn { color: var(--warn-ink); font-size: 12px; margin-top: 6px; }
+  .mwarn { color: var(--warn-ink); background: var(--warn-bg); border-radius: 8px; padding: 8px 11px; font-size: 12.5px; margin-top: 10px; }
   .alt { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); }
   .pv-imgs { display: grid; grid-template-columns: 1fr; gap: 2px; border-top: 1px solid var(--line); }
   .pv-imgs.two { grid-template-columns: 1fr 1fr; }
-  .pv-imgs img { width: 100%; display: block; }
+  .pv-imgs img, .pv-imgs video { width: 100%; display: block; }
 
   .pv { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
   .pv-head { display: flex; gap: 10px; align-items: center; padding: 12px 14px; }
@@ -197,9 +199,10 @@
         <textarea class="epost" id="ePost" spellcheck="true"></textarea>
 
         <div class="media">
-          <label class="elabel">Photos (optional)</label>
-          <div class="drop" id="eDrop">Drag photos here, or click to choose. JPG, PNG, or GIF. Add as many as you like.</div>
-          <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif" multiple hidden>
+          <label class="elabel">Photos or video (optional)</label>
+          <div class="drop" id="eDrop">Drag media here, or click to choose. Photos (JPG, PNG, GIF) or a video (MP4).</div>
+          <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif,video/mp4,video/quicktime" multiple hidden>
+          <div class="mwarn" id="eMediaWarn" hidden></div>
           <div class="gallery" id="eGallery"></div>
         </div>
 
@@ -522,6 +525,13 @@
       drop.style.pointerEvents = ro ? "none" : "";
       drop.style.opacity = ro ? ".5" : "";
       renderGallery(ro);
+      var mw = document.getElementById("eMediaWarn");
+      if (detail.media_warnings && detail.media_warnings.length) {
+        mw.innerHTML = detail.media_warnings.map(esc).join("<br>");
+        mw.hidden = false;
+      } else {
+        mw.hidden = true;
+      }
 
       // Publish now: only a ready, unposted draft
       var pubBtn = document.getElementById("ePublish");
@@ -658,48 +668,74 @@
       var g = document.getElementById("eGallery");
       g.innerHTML = "";
       currentMedia.forEach(function (m, i) {
+        var isVideo = m.kind === "video";
         var item = document.createElement("div");
         item.className = "gitem";
 
-        var img = document.createElement("img");
-        img.src = mediaUrl(i);
-        img.alt = m.alt || ("photo " + (i + 1));
+        var thumb;
+        if (isVideo) {
+          thumb = document.createElement("video");
+          thumb.src = mediaUrl(i);
+          thumb.muted = true;
+          thumb.setAttribute("playsinline", "");
+        } else {
+          thumb = document.createElement("img");
+          thumb.src = mediaUrl(i);
+          thumb.alt = m.alt || ("photo " + (i + 1));
+        }
 
         var col = document.createElement("div");
         col.className = "gcol";
 
-        var alt = document.createElement("input");
-        alt.className = "alt";
-        alt.type = "text";
-        alt.placeholder = "Alt text: describe this photo for screen readers";
-        alt.value = m.alt || "";
-        alt.disabled = ro;
-        var altTimer = null;
-        alt.addEventListener("input", function () {
-          var val = this.value;
-          if (altTimer) clearTimeout(altTimer);
-          altTimer = setTimeout(function () { saveAlt(i, val); }, 700);
-        });
+        if (isVideo) {
+          var label = document.createElement("div");
+          label.className = "note";
+          label.textContent = "Video";
+          col.appendChild(label);
+        } else {
+          var alt = document.createElement("input");
+          alt.className = "alt";
+          alt.type = "text";
+          alt.placeholder = "Alt text: describe this photo for screen readers";
+          alt.value = m.alt || "";
+          alt.disabled = ro;
+          var altTimer = null;
+          alt.addEventListener("input", function () {
+            var val = this.value;
+            if (altTimer) clearTimeout(altTimer);
+            altTimer = setTimeout(function () { saveAlt(i, val); }, 700);
+          });
+          col.appendChild(alt);
+        }
 
-        var desc = document.createElement("button");
-        desc.className = "btn describe-btn";
-        desc.textContent = "Describe";
-        desc.style.marginTop = "8px";
-        desc.style.marginRight = "8px";
-        desc.disabled = ro;
-        desc.addEventListener("click", function () { describePhoto(i); });
+        if (m.warnings && m.warnings.length) {
+          var w = document.createElement("div");
+          w.className = "gwarn";
+          w.textContent = m.warnings.join("  ");
+          col.appendChild(w);
+        }
 
+        var row = document.createElement("div");
+        if (!isVideo) {
+          var desc = document.createElement("button");
+          desc.className = "btn describe-btn";
+          desc.textContent = "Describe";
+          desc.style.marginTop = "8px";
+          desc.style.marginRight = "8px";
+          desc.disabled = ro;
+          desc.addEventListener("click", function () { describePhoto(i); });
+          row.appendChild(desc);
+        }
         var rm = document.createElement("button");
         rm.className = "btn danger";
         rm.textContent = "Remove";
         rm.style.marginTop = "8px";
         rm.disabled = ro;
         rm.addEventListener("click", function () { removePhoto(i); });
+        row.appendChild(rm);
 
-        col.appendChild(alt);
-        col.appendChild(desc);
-        col.appendChild(rm);
-        item.appendChild(img);
+        col.appendChild(row);
+        item.appendChild(thumb);
         item.appendChild(col);
         g.appendChild(item);
       });
@@ -734,7 +770,7 @@
         load();
         // Auto-generate alt text for any newly added photo that has none yet.
         var pending = [];
-        currentMedia.forEach(function (m, idx) { if (!m.alt) pending.push(idx); });
+        currentMedia.forEach(function (m, idx) { if (m.kind !== "video" && !m.alt) pending.push(idx); });
         if (pending.length) {
           eNote("Describing " + pending.length + (pending.length > 1 ? " photos" : " photo") + " for screen readers…", "busy");
           for (var k = 0; k < pending.length; k++) await describePhoto(pending[k]);
@@ -797,12 +833,20 @@
       }
       var box = document.getElementById("pvImgs");
       box.innerHTML = "";
-      box.className = "pv-imgs" + (currentMedia.length >= 2 ? " two" : "");
+      var onlyImages = currentMedia.every(function (m) { return m.kind !== "video"; });
+      box.className = "pv-imgs" + (onlyImages && currentMedia.length >= 2 ? " two" : "");
       currentMedia.forEach(function (m, i) {
-        var img = document.createElement("img");
-        img.src = mediaUrl(i);
-        img.alt = m.alt || ("photo " + (i + 1));
-        box.appendChild(img);
+        var el;
+        if (m.kind === "video") {
+          el = document.createElement("video");
+          el.src = mediaUrl(i);
+          el.controls = true;
+        } else {
+          el = document.createElement("img");
+          el.src = mediaUrl(i);
+          el.alt = m.alt || ("photo " + (i + 1));
+        }
+        box.appendChild(el);
       });
     }
     document.getElementById("ePreviewBtn").addEventListener("click", function () {

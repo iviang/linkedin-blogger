@@ -58,6 +58,15 @@ AGENT_NOTES = BASE_DIR / "agent_notes.md"     # freeform milestones/errors/next 
 AGENT_LOG = BASE_DIR / "agent_log.md"         # generated: readable synthesis of GitHub + notes
 REFERENCE_FILE = BASE_DIR / "reference.md"    # generated: merged activity + agent log since last post
 
+# LinkedIn media limits used to warn before publishing. These are LinkedIn's documented
+# limits for member posts; LinkedIn is the final authority and rejects anything over them at
+# publish time, so treat these as a heads-up, not a guarantee. Override in .env if they change.
+IMAGE_MAX_MB = float(os.getenv("LINKEDIN_IMAGE_MAX_MB", "10"))
+VIDEO_MAX_MB = float(os.getenv("LINKEDIN_VIDEO_MAX_MB", "5120"))       # 5 GB
+VIDEO_MIN_KB = float(os.getenv("LINKEDIN_VIDEO_MIN_KB", "75"))
+VIDEO_MAX_SECONDS = int(os.getenv("LINKEDIN_VIDEO_MAX_SECONDS", "900"))  # 15 minutes
+VIDEO_MIN_SECONDS = int(os.getenv("LINKEDIN_VIDEO_MIN_SECONDS", "3"))
+
 # Stage C: publish queue lock window (minutes before scheduled_at when edits stop).
 QUEUE_LOCK_MINUTES = int(os.getenv("QUEUE_LOCK_MINUTES", "15"))
 
