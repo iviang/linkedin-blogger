@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from anthropic import Anthropic
 
-import config
+from . import config
 
 # Activity entries are expected as "## YYYY-MM-DD" headings followed by notes.
 _DATE_HEADING = re.compile(r"^##\s*(\d{4}-\d{2}-\d{2})\b", re.MULTILINE)

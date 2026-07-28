@@ -7,8 +7,7 @@ would violate LinkedIn's User Agreement and risk the account, so we do not do th
 
 import requests
 
-import auth
-import config
+from . import auth, config
 
 POSTS_URL = "https://api.linkedin.com/rest/posts"
 

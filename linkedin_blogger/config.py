@@ -5,9 +5,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# BASE_DIR is the repo root (the parent of this package), where .env and the per-user
+# data files live. Data stays at the project root, not inside the package.
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 # Files that hold per-user state. Kept out of git via .gitignore because they
 # contain tokens (tokens.json) or personal scheduling state (state.json).
