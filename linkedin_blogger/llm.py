@@ -23,6 +23,11 @@ def ask(system: str, user: str, max_tokens: int = 2048) -> str:
             model=config.ANTHROPIC_MODEL,
             max_tokens=max_tokens,
             system=system,
+            # These are deterministic drafting/extraction tasks. Sonnet 5 runs adaptive
+            # thinking by default, which can consume the whole max_tokens budget and leave
+            # the text output empty (JSON checks then fail). Turn it off so the full budget
+            # goes to the answer.
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": user}],
         )
     except anthropic.OverloadedError:

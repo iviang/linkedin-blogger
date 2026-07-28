@@ -75,7 +75,13 @@ def _parse_json(text: str):
     """Extract JSON from a bare string or a fenced code block."""
     match = _JSON_FENCE.search(text)
     payload = match.group(1).strip() if match else text.strip()
-    return json.loads(payload)
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        raise SystemExit(
+            "The model did not return valid JSON for this step. Re-run the command; if it "
+            "persists, the reference or draft may be too long for the token budget."
+        )
 
 
 def load_reference() -> str:
