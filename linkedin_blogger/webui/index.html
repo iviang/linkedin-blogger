@@ -113,15 +113,16 @@
   .eactions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
   .grow { flex: 1 1 160px; }
 
-  .ref { margin: 0; padding: 16px 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); border-top: 1px solid var(--line); background: var(--raise); max-height: 340px; overflow: auto; }
+  .ref { margin: 12px 0 0; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; background: var(--raise); max-height: 340px; overflow: auto; }
 
-  /* editor modal */
-  .overlay { position: fixed; inset: 0; background: rgba(9,13,17,.55); display: none; align-items: flex-start; justify-content: center; padding: 34px 16px; overflow: auto; z-index: 50; }
-  .overlay.open { display: flex; }
-  .editor { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 700px; box-shadow: 0 24px 60px rgba(0,0,0,.30); }
-  .ehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 20px; border-bottom: 1px solid var(--line); }
-  .ehead h2 { font-size: 13px; margin: 0; font-family: var(--mono); color: var(--muted); letter-spacing: .02em; }
+  /* inline editor */
+  .phead-r { display: flex; align-items: center; gap: 10px; }
+  .picker { font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); max-width: 280px; }
   .ebody { padding: 18px 20px; }
+  .estatus { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 14px; }
+  .spellrow { margin-top: 9px; }
+  .spellpill { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
+  .spellpill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
   .etitle { width: 100%; font: inherit; font-size: 18px; font-weight: 650; letter-spacing: -.01em; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); margin-bottom: 15px; }
   .etitle:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
   .epost { width: 100%; font: inherit; font-size: 14px; line-height: 1.6; padding: 13px 14px; border: 1px solid var(--line2); border-radius: 10px; background: var(--raise); color: var(--ink); resize: vertical; min-height: 230px; }
@@ -194,15 +195,82 @@
         <p class="lead">Pull your activity since the last post into a reference, brainstorm angles from it, then write a skeleton to fill in your own voice.</p>
         <div class="flow">
           <button class="btn" id="ingestBtn">1 &middot; Run ingest</button>
+          <button class="btn" id="refBtn">View reference</button>
           <button class="btn" id="brainstormBtn">2 &middot; Brainstorm ideas</button>
           <button class="btn" id="reshuffleBtn" hidden>Reshuffle</button>
           <span class="count grow" id="flowMsg"></span>
         </div>
+        <pre class="ref" id="reference" hidden></pre>
         <div class="ideas" id="ideas"></div>
         <div id="skeletonStep" hidden>
           <label class="dirlabel" for="direction">Direction for the draft (optional)</label>
           <textarea class="dir" id="direction" rows="2" placeholder="Any angle, emphasis, or tone to steer the skeleton"></textarea>
           <button class="btn primary" id="skeletonBtn" disabled>3 &middot; Create skeleton draft</button>
+        </div>
+      </section>
+
+      <section class="panel" id="editorPanel">
+        <div class="phead">
+          <h2>Editor</h2>
+          <div class="phead-r">
+            <select id="draftPicker" class="picker" aria-label="Choose a draft to edit">
+              <option value="">Select a draft&hellip;</option>
+            </select>
+            <button class="btn" id="eClose" hidden>Close</button>
+          </div>
+        </div>
+        <p class="empty" id="editorEmpty" style="padding: 16px 18px; margin: 0;">Pick a draft above, or click one in the lists below, to edit it here.</p>
+        <div class="ebody" id="editorBody" hidden>
+          <div class="estatus" id="eId"></div>
+          <div class="lock" id="eLock" hidden></div>
+          <label class="elabel" for="eTitle">Title</label>
+          <input class="etitle" id="eTitle" type="text">
+          <label class="elabel" for="ePost">Post body</label>
+          <textarea class="epost" id="ePost" spellcheck="true"></textarea>
+          <div class="spellrow"><span class="spellpill">Spell check on</span></div>
+
+          <div class="media">
+            <label class="elabel">Photos or video (optional)</label>
+            <div class="drop" id="eDrop">Drag media here, or click to choose. Photos (JPG, PNG, GIF) or a video (MP4).</div>
+            <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif,video/mp4,video/quicktime" multiple hidden>
+            <div class="mwarn" id="eMediaWarn" hidden></div>
+            <div class="gallery" id="eGallery"></div>
+          </div>
+
+          <div class="eactions">
+            <button class="btn primary" id="eSave">Save</button>
+            <button class="btn" id="eCheck">Run check</button>
+            <span class="note grow" id="eNote"></span>
+          </div>
+          <div class="flags" id="eFlags"></div>
+
+          <div class="eactions">
+            <button class="btn" id="ePreviewBtn">Show preview</button>
+            <span class="note grow">See it as it will appear on LinkedIn</span>
+          </div>
+          <div class="pv" id="ePreview" hidden>
+            <div class="pv-head">
+              <div class="pv-av" id="pvAv">VN</div>
+              <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+            </div>
+            <div class="pv-text" id="pvText"></div>
+            <div class="pv-imgs" id="pvImgs"></div>
+            <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
+          </div>
+
+          <div class="sched">
+            <label class="elabel" for="eWhen">Schedule</label>
+            <div class="eactions">
+              <input class="etime" id="eWhen" type="datetime-local">
+              <button class="btn" id="eSchedule">Set schedule</button>
+              <button class="btn danger" id="eDelete">Delete</button>
+              <span class="note grow" id="eSchedNote"></span>
+            </div>
+            <div class="eactions" style="margin-top: 12px;">
+              <button class="btn primary" id="ePublish">Publish now</button>
+              <span class="note grow" id="ePubNote"></span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -217,11 +285,6 @@
       </section>
 
       <section class="panel">
-        <div class="phead"><h2>Reference notes</h2><button class="btn" id="refBtn">View</button></div>
-        <pre class="ref" id="reference" hidden></pre>
-      </section>
-
-      <section class="panel">
         <div class="phead"><h2>Settings</h2></div>
         <div class="list">
           <label class="elabel" for="freq">Post every N days (default when you queue a post without a time)</label>
@@ -233,65 +296,6 @@
           </div>
         </div>
       </section>
-    </div>
-  </div>
-
-  <div class="overlay" id="overlay">
-    <div class="editor" role="dialog" aria-modal="true" aria-label="Edit draft">
-      <div class="ehead">
-        <h2 id="eId">Draft</h2>
-        <button class="btn" id="eClose">Close</button>
-      </div>
-      <div class="ebody">
-        <div class="lock" id="eLock" hidden></div>
-        <label class="elabel" for="eTitle">Title</label>
-        <input class="etitle" id="eTitle" type="text">
-        <label class="elabel" for="ePost">Post body</label>
-        <textarea class="epost" id="ePost" spellcheck="true"></textarea>
-
-        <div class="media">
-          <label class="elabel">Photos or video (optional)</label>
-          <div class="drop" id="eDrop">Drag media here, or click to choose. Photos (JPG, PNG, GIF) or a video (MP4).</div>
-          <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif,video/mp4,video/quicktime" multiple hidden>
-          <div class="mwarn" id="eMediaWarn" hidden></div>
-          <div class="gallery" id="eGallery"></div>
-        </div>
-
-        <div class="eactions">
-          <button class="btn primary" id="eSave">Save</button>
-          <button class="btn" id="eCheck">Run check</button>
-          <span class="note grow" id="eNote"></span>
-        </div>
-        <div class="flags" id="eFlags"></div>
-
-        <div class="eactions">
-          <button class="btn" id="ePreviewBtn">Show preview</button>
-          <span class="note grow">See it as it will appear on LinkedIn</span>
-        </div>
-        <div class="pv" id="ePreview" hidden>
-          <div class="pv-head">
-            <div class="pv-av" id="pvAv">VN</div>
-            <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
-          </div>
-          <div class="pv-text" id="pvText"></div>
-          <div class="pv-imgs" id="pvImgs"></div>
-          <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
-        </div>
-
-        <div class="sched">
-          <label class="elabel" for="eWhen">Schedule</label>
-          <div class="eactions">
-            <input class="etime" id="eWhen" type="datetime-local">
-            <button class="btn" id="eSchedule">Set schedule</button>
-            <button class="btn danger" id="eDelete">Delete</button>
-            <span class="note grow" id="eSchedNote"></span>
-          </div>
-          <div class="eactions" style="margin-top: 12px;">
-            <button class="btn primary" id="ePublish">Publish now</button>
-            <span class="note grow" id="ePubNote"></span>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -348,6 +352,15 @@
         renderList("drafts", d.drafts, "No drafts yet. Run <code>ingest</code>, then <code>brainstorm</code>.");
         var q = await getJSON("/api/queue");
         renderList("queue", q.queue, "Queue is empty.");
+
+        // Keep the draft picker in sync with both lists, preserving the current selection.
+        var all = d.drafts.concat(q.queue);
+        var picker = document.getElementById("draftPicker");
+        var cur = picker.value;
+        picker.innerHTML = '<option value="">Select a draft&hellip;</option>' + all.map(function (it) {
+          return '<option value="' + esc(it.id) + '">' + esc(it.title || "(untitled)") + " — " + esc(it.status) + "</option>";
+        }).join("");
+        picker.value = cur;
       } catch (e) {
         document.getElementById("chips").innerHTML = '<span class="chip warn">could not reach server</span>';
       }
@@ -601,19 +614,28 @@
     }
 
     async function openEditor(id) {
-      document.getElementById("overlay").classList.add("open");
+      // Flush a pending autosave for whatever draft is open before switching to another.
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await flushSave(); }
+      document.getElementById("editorEmpty").hidden = true;
+      document.getElementById("editorBody").hidden = false;
+      document.getElementById("eClose").hidden = false;
       document.getElementById("eFlags").innerHTML = "";
       eNote("Loading…", "busy");
       try {
         var detail = await getJSON("/api/drafts/" + encodeURIComponent(id));
         if (detail.error) throw new Error(detail.error);
         fillEditor(detail);
+        document.getElementById("draftPicker").value = id;
+        document.getElementById("editorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (e) { eNote(e.message, "warn"); }
     }
 
     function closeEditor() {
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushSave(); }
-      document.getElementById("overlay").classList.remove("open");
+      document.getElementById("editorBody").hidden = true;
+      document.getElementById("editorEmpty").hidden = false;
+      document.getElementById("eClose").hidden = true;
+      document.getElementById("draftPicker").value = "";
       currentDraftId = null;
     }
 
@@ -644,11 +666,8 @@
     document.getElementById("eTitle").addEventListener("input", scheduleAutosave);
 
     document.getElementById("eClose").addEventListener("click", closeEditor);
-    document.getElementById("overlay").addEventListener("click", function (e) {
-      if (e.target === this) closeEditor();
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && document.getElementById("overlay").classList.contains("open")) closeEditor();
+    document.getElementById("draftPicker").addEventListener("change", function () {
+      if (this.value) openEditor(this.value); else closeEditor();
     });
 
     document.getElementById("eSave").addEventListener("click", async function () {
