@@ -3,11 +3,43 @@ duplicate the CLI's parsing. Front matter is a block fenced by lines of three da
 everything after the closing fence is the body.
 """
 
+import json
 from datetime import datetime
 
 from . import config
 
 FENCE = "---"
+
+
+def get_media(meta: dict) -> list[dict]:
+    """Return a draft's photos as a list of {path, alt}.
+
+    Photos are stored as a JSON array on the `media` front-matter line. Older drafts used a
+    single `media` path plus a `media_alt` line, so that shape is read too for compatibility.
+    """
+    raw = (meta.get("media") or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+        return [
+            {"path": it["path"], "alt": it.get("alt", "")}
+            for it in items
+            if isinstance(it, dict) and it.get("path")
+        ]
+    return [{"path": raw, "alt": meta.get("media_alt", "")}]
+
+
+def set_media(meta: dict, media: list[dict]) -> None:
+    """Write the photo list back to meta as JSON, or clear it when empty."""
+    meta.pop("media_alt", None)  # legacy single-photo field, folded into the list
+    if media:
+        meta["media"] = json.dumps([{"path": m["path"], "alt": m.get("alt", "")} for m in media])
+    else:
+        meta.pop("media", None)
 
 
 def draft_path(draft_id: str):
@@ -74,7 +106,7 @@ def list_drafts() -> list[dict]:
                 "title": meta.get("idea_title", ""),
                 "preview": body.replace("\n", " ")[:140],
                 "scheduled_at": meta.get("scheduled_at"),
-                "media": meta.get("media"),
+                "media_count": len(get_media(meta)),
             }
         )
     return out

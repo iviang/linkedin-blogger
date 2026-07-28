@@ -26,7 +26,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import agent_log, auth, config, content, github_activity, nudge, processing, queue, state
+from . import agent_log, auth, config, content, drafts, github_activity, nudge, processing, queue, state
 
 # Minimal front-matter format so we avoid a YAML dependency. The block is fenced by
 # lines of three dashes; everything after the closing fence is the post body.
@@ -242,8 +242,9 @@ def cmd_preview(args):
             print(f"locked: edits blocked ({config.QUEUE_LOCK_MINUTES} min before publish)")
         else:
             print(f"editable until: {queue.lock_deadline(scheduled).isoformat(timespec='seconds')}")
-    if meta.get("media"):
-        print(f"media:  {meta['media']}")
+    media = drafts.get_media(meta)
+    if media:
+        print(f"media:  {', '.join(m['path'] for m in media)}")
     if meta.get("publish_error"):
         print(f"last error: {meta['publish_error']}")
     check = processing.load_check(args.id)
@@ -382,14 +383,15 @@ def cmd_attach(args):
         raise SystemExit(f"Media file not found: {candidate}")
 
     try:
-        meta["media"] = candidate.relative_to(config.BASE_DIR).as_posix()
+        rel = candidate.relative_to(config.BASE_DIR).as_posix()
     except ValueError:
-        meta["media"] = str(candidate)
+        rel = str(candidate)
 
-    if args.alt:
-        meta["media_alt"] = args.alt
+    media = drafts.get_media(meta)
+    media.append({"path": rel, "alt": args.alt or ""})
+    drafts.set_media(meta, media)
     _write_draft(meta, body, path)
-    print(f"Attached {meta['media']} to {args.id}")
+    print(f"Attached {rel} to {args.id} ({len(media)} photo(s) total)")
 
 
 def cmd_retry(args):

@@ -77,8 +77,21 @@ def upload_image(image_path: Path) -> str:
     return image_urn
 
 
-def publish_post(text: str, media_path: Path | None = None, alt_text: str = "") -> str:
-    """Publish a post. Returns the post URN or raises PublishError."""
+def _image_entry(image: dict) -> dict:
+    """Upload one image and return its {id, altText?} entry for the post body."""
+    entry = {"id": upload_image(image["path"])}
+    alt = (image.get("alt") or "").strip()
+    if alt:
+        entry["altText"] = alt
+    return entry
+
+
+def publish_post(text: str, images: list[dict] | None = None) -> str:
+    """Publish a post. `images` is a list of {path, alt}. Returns the post URN or raises.
+
+    LinkedIn uses `content.media` for a single image and `content.multiImage` for two or
+    more, so we pick the shape based on how many photos are attached.
+    """
     author = auth.get_member_urn()
     body = {
         "author": author,
@@ -93,12 +106,11 @@ def publish_post(text: str, media_path: Path | None = None, alt_text: str = "") 
         "isReshareDisabledByAuthor": False,
     }
 
-    if media_path:
-        image_urn = upload_image(media_path)
-        media = {"id": image_urn}
-        if alt_text.strip():
-            media["altText"] = alt_text.strip()
-        body["content"] = {"media": media}
+    images = images or []
+    if len(images) == 1:
+        body["content"] = {"media": _image_entry(images[0])}
+    elif len(images) >= 2:
+        body["content"] = {"multiImage": {"images": [_image_entry(i) for i in images]}}
 
     resp = requests.post(POSTS_URL, headers=_api_headers(), json=body, timeout=60)
     if resp.status_code >= 400:
@@ -112,4 +124,4 @@ def publish_post(text: str, media_path: Path | None = None, alt_text: str = "") 
 
 def publish_text_post(text: str) -> str:
     """Backward-compatible wrapper for text-only posts."""
-    return publish_post(text)
+    return publish_post(text, images=None)

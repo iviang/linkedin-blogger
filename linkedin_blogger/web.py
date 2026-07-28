@@ -197,8 +197,7 @@ def create_app() -> Flask:
             "title": meta.get("idea_title", ""),
             "body": body,
             "scheduled_at": meta.get("scheduled_at"),
-            "media": meta.get("media"),
-            "media_alt": meta.get("media_alt", ""),
+            "media": [{"alt": m["alt"]} for m in drafts.get_media(meta)],
             "check": processing.load_check(draft_id),
             "check_stale": processing.check_is_stale(draft_id, body),
             "has_gaps": processing.has_unfilled_gaps(body),
@@ -227,8 +226,6 @@ def create_app() -> Flask:
             return {"error": "Missing body."}, 400
         if "title" in data:
             meta["idea_title"] = (data.get("title") or "").strip()
-        if "media_alt" in data and meta.get("media"):
-            meta["media_alt"] = (data.get("media_alt") or "").strip()
         # A body edit invalidates any prior check; check_is_stale surfaces that until re-run.
         drafts.write_draft(meta, new_body, path)
         return _draft_detail(draft_id)
@@ -350,51 +347,78 @@ def create_app() -> Flask:
     @app.post("/api/drafts/<draft_id>/media")
     @guarded
     def api_draft_media_upload(draft_id):
+        """Append one or more photos to the draft. Accepts multiple files in one request."""
         path = drafts.draft_path(draft_id)
         if not path.exists():
             return {"error": "No draft with that id."}, 404
         meta, body = drafts.read_draft(path)
         queue.assert_editable(meta)
-        upload = request.files.get("file")
-        if not upload or not upload.filename:
+        uploads = [u for u in request.files.getlist("file") if u and u.filename]
+        if not uploads:
             return {"error": "No file selected."}, 400
-        ext = Path(upload.filename).suffix.lower()
-        if ext not in ALLOWED_IMAGE_EXTS:
-            return {"error": f"Unsupported image type {ext or '(none)'}. Use JPG, PNG, or GIF."}, 400
+        media = drafts.get_media(meta)
         UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        safe = secure_filename(upload.filename) or f"image{ext}"
-        dest = UPLOADS_DIR / f"{draft_id}-{safe}"
-        upload.save(dest)
-        meta["media"] = dest.relative_to(config.BASE_DIR).as_posix()
-        alt = (request.form.get("alt") or "").strip()
-        if alt:
-            meta["media_alt"] = alt
+        for upload in uploads:
+            ext = Path(upload.filename).suffix.lower()
+            if ext not in ALLOWED_IMAGE_EXTS:
+                return {"error": f"Unsupported image type {ext or '(none)'}. Use JPG, PNG, or GIF."}, 400
+            safe = secure_filename(upload.filename) or f"image{ext}"
+            # A microsecond stamp keeps names unique so a re-added photo never overwrites another.
+            stamp = datetime.now().strftime("%H%M%S%f")
+            dest = UPLOADS_DIR / f"{draft_id}-{stamp}-{safe}"
+            upload.save(dest)
+            media.append({"path": dest.relative_to(config.BASE_DIR).as_posix(), "alt": ""})
+        drafts.set_media(meta, media)
         drafts.write_draft(meta, body, path)
         return _draft_detail(draft_id)
 
-    @app.delete("/api/drafts/<draft_id>/media")
+    @app.delete("/api/drafts/<draft_id>/media/<int:index>")
     @guarded
-    def api_draft_media_remove(draft_id):
+    def api_draft_media_remove(draft_id, index):
         path = drafts.draft_path(draft_id)
         if not path.exists():
             return {"error": "No draft with that id."}, 404
         meta, body = drafts.read_draft(path)
         queue.assert_editable(meta)
-        meta.pop("media", None)
-        meta.pop("media_alt", None)
+        media = drafts.get_media(meta)
+        if index < 0 or index >= len(media):
+            return {"error": "No photo at that position."}, 404
+        removed = media.pop(index)
+        try:  # best-effort file cleanup; a missing file is not an error
+            (config.BASE_DIR / removed["path"]).unlink()
+        except OSError:
+            pass
+        drafts.set_media(meta, media)
         drafts.write_draft(meta, body, path)
         return _draft_detail(draft_id)
 
-    @app.get("/api/drafts/<draft_id>/media")
-    def api_draft_media_get(draft_id):
+    @app.post("/api/drafts/<draft_id>/media/<int:index>/alt")
+    @guarded
+    def api_draft_media_alt(draft_id, index):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        queue.assert_editable(meta)
+        media = drafts.get_media(meta)
+        if index < 0 or index >= len(media):
+            return {"error": "No photo at that position."}, 404
+        data = request.get_json(silent=True) or {}
+        media[index]["alt"] = (data.get("alt") or "").strip()
+        drafts.set_media(meta, media)
+        drafts.write_draft(meta, body, path)
+        return _draft_detail(draft_id)
+
+    @app.get("/api/drafts/<draft_id>/media/<int:index>")
+    def api_draft_media_get(draft_id, index):
         path = drafts.draft_path(draft_id)
         if not path.exists():
             return {"error": "No draft with that id."}, 404
         meta, _body = drafts.read_draft(path)
-        raw = meta.get("media")
-        if not raw:
-            return {"error": "No media on this draft."}, 404
-        abspath = (config.BASE_DIR / raw).resolve()
+        media = drafts.get_media(meta)
+        if index < 0 or index >= len(media):
+            return {"error": "No photo at that position."}, 404
+        abspath = (config.BASE_DIR / media[index]["path"]).resolve()
         base = config.BASE_DIR.resolve()
         # Only ever serve files under the project root, never an arbitrary path from meta.
         if base not in abspath.parents or not abspath.exists():

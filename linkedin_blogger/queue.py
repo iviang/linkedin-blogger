@@ -6,7 +6,7 @@ only marked posted after LinkedIn returns a post URN.
 
 from datetime import datetime, timedelta, timezone
 
-from . import config, linkedin, state
+from . import config, drafts, linkedin, state
 
 # Statuses the owner can still edit (when not within the lock window).
 EDITABLE = {"pending", "skeleton", "approved", "queued", "failed"}
@@ -77,14 +77,16 @@ def ready_to_publish(meta: dict) -> bool:
     return is_due(scheduled)
 
 
-def resolve_media_path(meta: dict):
-    raw = meta.get("media")
-    if not raw:
-        return None
-    path = config.BASE_DIR / raw
-    if not path.exists():
-        raise SystemExit(f"Media file not found: {path}")
-    return path
+def resolve_media(meta: dict) -> list[dict]:
+    """Turn a draft's stored photo list into {path, alt} entries with absolute, existing
+    paths, ready for the LinkedIn upload. Raises if a referenced file is missing."""
+    resolved = []
+    for item in drafts.get_media(meta):
+        path = config.BASE_DIR / item["path"]
+        if not path.exists():
+            raise SystemExit(f"Media file not found: {path}")
+        resolved.append({"path": path, "alt": item.get("alt", "")})
+    return resolved
 
 
 def publish_draft(meta: dict, body: str, write_draft) -> bool:
@@ -94,11 +96,10 @@ def publish_draft(meta: dict, body: str, write_draft) -> bool:
     meta["status"] = "posting"
     write_draft(meta, body)
 
-    media = resolve_media_path(meta)
-    alt_text = meta.get("media_alt", "")
+    images = resolve_media(meta)
 
     try:
-        urn = linkedin.publish_post(body, media_path=media, alt_text=alt_text)
+        urn = linkedin.publish_post(body, images=images)
     except linkedin.PublishError as exc:
         meta["status"] = "failed"
         meta["publish_error"] = str(exc)
