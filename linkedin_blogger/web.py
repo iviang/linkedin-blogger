@@ -13,11 +13,20 @@ from pathlib import Path
 from flask import Flask, request, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 
-from . import agent_log, config, drafts, processing, queue, state
+from . import agent_log, auth, config, drafts, processing, queue, state
 
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
 UPLOADS_DIR = config.DRAFTS_DIR / "uploads"  # under gitignored drafts/, so photos never get committed
 ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif"}
+
+# Two lanes on the dashboard. Once a draft is queued it leaves the Drafts list and lives in
+# the Queue; posted/posting drafts are done and show in neither.
+QUEUE_STATUSES = {"queued", "approved", "failed"}
+DONE_STATUSES = {"posted", "posting"}
+
+# Cached once per server run: the picture URL from userinfo can expire, but that is fine for
+# a local tool restarted often, and it avoids a LinkedIn call on every preview.
+_PROFILE_CACHE: dict = {}
 
 
 def guarded(view):
@@ -53,23 +62,39 @@ def create_app() -> Flask:
     def api_status():
         last = state.get_last_posted_at()
         items = drafts.list_drafts()
-        queued = [d for d in items if d["status"] in ("queued", "approved", "failed")]
+        in_drafts = [d for d in items if d["status"] not in QUEUE_STATUSES | DONE_STATUSES]
+        queued = [d for d in items if d["status"] in QUEUE_STATUSES]
         return {
             "last_posted_at": last.isoformat() if last else None,
             "reference_exists": config.REFERENCE_FILE.exists(),
             "repos": config.GITHUB_REPOS,
-            "draft_count": len(items),
+            "draft_count": len(in_drafts),
             "queued_count": len(queued),
         }
 
     @app.get("/api/drafts")
     def api_drafts():
-        return {"drafts": drafts.list_drafts()}
+        # Only work-in-progress drafts; queued ones move to the Queue, posted ones are done.
+        items = [d for d in drafts.list_drafts() if d["status"] not in QUEUE_STATUSES | DONE_STATUSES]
+        return {"drafts": items}
 
     @app.get("/api/queue")
     def api_queue():
-        queued = [d for d in drafts.list_drafts() if d["status"] in ("queued", "approved", "failed")]
+        queued = [d for d in drafts.list_drafts() if d["status"] in QUEUE_STATUSES]
         return {"queue": queued}
+
+    @app.get("/api/profile")
+    def api_profile():
+        """Your LinkedIn name and picture for the preview. Falls back to nulls if not logged in."""
+        if _PROFILE_CACHE.get("name"):
+            return _PROFILE_CACHE
+        try:
+            profile = auth.get_profile()
+        except Exception:  # noqa: BLE001 - not logged in / network; preview falls back gracefully
+            return {"name": None, "picture": None}
+        if profile.get("name"):
+            _PROFILE_CACHE.update(profile)
+        return profile
 
     @app.get("/api/reference")
     def api_reference():

@@ -146,6 +146,23 @@ def get_access_token() -> str:
     return tokens["access_token"]
 
 
+def get_profile() -> dict:
+    """Return {name, picture} from OpenID userinfo (needs the `profile` scope).
+
+    The picture is a LinkedIn CDN URL that can expire, so callers should fetch fresh
+    rather than persist it. Raises SystemExit (via get_access_token) if not logged in.
+    """
+    token = get_access_token()
+    resp = requests.get(
+        USERINFO_URL,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return {"name": data.get("name", ""), "picture": data.get("picture", "")}
+
+
 def get_member_urn() -> str:
     """Return the author URN (urn:li:person:{id}) required by the Posts API.
 

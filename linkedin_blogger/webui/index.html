@@ -112,7 +112,8 @@
 
   .pv { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
   .pv-head { display: flex; gap: 10px; align-items: center; padding: 12px 14px; }
-  .pv-av { width: 40px; height: 40px; border-radius: 50%; background: var(--navy); color: #F5F3EC; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; }
+  .pv-av { width: 40px; height: 40px; border-radius: 50%; background: var(--navy); color: #F5F3EC; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; overflow: hidden; }
+  .pv-av img { width: 100%; height: 100%; object-fit: cover; }
   .pv-name { font-size: 13.5px; font-weight: 600; }
   .pv-sub { font-size: 11.5px; color: var(--faint); }
   .pv-text { padding: 0 14px 12px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
@@ -166,12 +167,7 @@
     </section>
 
     <section class="panel">
-      <div class="phead"><h2>Queue</h2>
-        <span style="display: flex; gap: 10px; align-items: center;">
-          <span class="count" id="queueCount"></span>
-          <button class="btn" id="publishDueBtn">Publish due</button>
-        </span>
-      </div>
+      <div class="phead"><h2>Queue</h2><span class="count" id="queueCount"></span></div>
       <div class="list" id="queue"><p class="empty">Loading&hellip;</p></div>
     </section>
 
@@ -222,8 +218,8 @@
         </div>
         <div class="pv" id="ePreview" hidden>
           <div class="pv-head">
-            <div class="pv-av">VN</div>
-            <div><div class="pv-name">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+            <div class="pv-av" id="pvAv">VN</div>
+            <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
           </div>
           <div class="pv-text" id="pvText"></div>
           <img class="pv-img" id="pvImg" hidden alt="post photo preview">
@@ -401,6 +397,10 @@
       el.textContent = text || "";
       el.className = "note grow" + (cls ? " " + cls : "");
     }
+    var profile = { name: null, picture: null };
+    async function loadProfile() {
+      try { profile = await getJSON("/api/profile"); } catch (e) { /* preview falls back */ }
+    }
     async function loadSettings() {
       try {
         var s = await getJSON("/api/settings");
@@ -510,7 +510,7 @@
       when.disabled = ro;
       var queued = detail.status === "queued" || detail.status === "approved" || detail.status === "failed";
       var schedBtn = document.getElementById("eSchedule");
-      schedBtn.textContent = queued ? "Update schedule" : "Set schedule";
+      schedBtn.textContent = queued ? "Update schedule" : "Queue";
       schedBtn.disabled = ro;
       document.getElementById("eDelete").disabled =
         detail.status === "posted" || detail.status === "posting";
@@ -716,6 +716,17 @@
     // Preview: a LinkedIn-style card rendered from the live text and attached photo
     function renderPreview() {
       document.getElementById("pvText").textContent = document.getElementById("ePost").value;
+      document.getElementById("pvName").textContent = profile.name || "You";
+      var av = document.getElementById("pvAv");
+      if (profile.picture) {
+        av.innerHTML = "";
+        var avImg = document.createElement("img");
+        avImg.src = profile.picture;
+        avImg.alt = profile.name || "profile photo";
+        av.appendChild(avImg);
+      } else {
+        av.textContent = "VN";
+      }
       var img = document.getElementById("pvImg");
       if (currentMedia) {
         img.src = "/api/drafts/" + encodeURIComponent(currentDraftId) + "/media?t=" + Date.now();
@@ -749,23 +760,6 @@
       } catch (e) { ePubNote(e.message, "warn"); this.disabled = false; }
     });
 
-    // Publish due: every draft whose scheduled time has arrived
-    document.getElementById("publishDueBtn").addEventListener("click", async function () {
-      if (!window.confirm("Publish all due posts to LinkedIn now?")) return;
-      this.disabled = true;
-      var prev = this.textContent;
-      this.textContent = "Publishing…";
-      try {
-        var r = await postJSON("/api/publish", {});
-        var msg = r.published + " published, " + r.failed + " failed";
-        if (!r.published && !r.failed) msg = "No posts are due yet";
-        await load(); // refresh lists first, then leave the result on screen
-        document.getElementById("queueCount").textContent = msg;
-      } catch (e) {
-        document.getElementById("queueCount").textContent = e.message;
-      } finally { this.textContent = prev; this.disabled = false; }
-    });
-
     ["drafts", "queue"].forEach(function (id) {
       document.getElementById(id).addEventListener("click", function (e) {
         var row = e.target.closest(".row[data-id]");
@@ -786,6 +780,7 @@
     load();
     loadIdeas();
     loadSettings();
+    loadProfile();
   </script>
 </body>
 </html>
