@@ -50,6 +50,40 @@ page the owner has. Three stages:
 - Secrets live in a **gitignored `.env`**. Drafting model: `claude-sonnet-5`.
 - Design principle: **nothing publishes without human approval.**
 
+## Design principles (HCI)
+
+The design was reached by instinct (keep my own voice, lower the anxiety of a blank post),
+and it maps cleanly onto established human-computer interaction work. This section names the
+principles so the "built on HCI principles" claim is defensible, not decorative. The honest
+framing: the design *embodies* these, it was not formally derived from the papers.
+
+Anchors (the two strongest, unarguable):
+
+- **Mixed-initiative interaction** (Horvitz, 1999). The system proposes (ideas, a skeleton),
+  the human disposes (selects, edits, approves). This is the shape of the whole pipeline.
+- **Levels of automation** (Sheridan and Verplank; Parasuraman, Sheridan and Wickens). A
+  deliberate choice to sit at "the computer suggests and executes only after human approval,"
+  with the gate in a known place, rather than defaulting to full autonomy.
+
+Supporting principles mapped to decisions:
+
+- **Guards against automation bias / complacency.** Never auto-posts; the human is the gate,
+  so there is no rubber-stamping an AI post.
+- **Nielsen usability heuristics:** user control and freedom (`override`, `reshuffle`, pull
+  from the queue to edit); visibility of system status (`preview`, `queue`, lock state,
+  check results); error prevention and recovery (the error check names issues with excerpts
+  and lets you fix or override; the 15-minute lock prevents last-second edits going live).
+- **Scaffolding and cognitive load.** The skeleton-with-gaps structures a hard task (the
+  blank page) and is removed once filled, which is the direct answer to the anxiety problem.
+- **Progressive disclosure / chunking.** "Write a post" is split into one-decision-per-step
+  stages so complexity stays manageable.
+- **Behavioral design (adjacent, not core HCI).** The cadence-based email nudge is a trigger
+  (Fogg Behavior Model) that lands when effort is low because the skeleton lowered it. Real,
+  but do not lead with it as HCI proof.
+
+If asked "which HCI principles," lead with mixed-initiative interaction and levels of
+automation.
+
 ## Architecture (module map)
 
 ```
