@@ -50,12 +50,23 @@ _CHECK_SYSTEM = """You review a LinkedIn post draft against the reference materi
 written from.
 
 Flag problems in these categories only:
-- discrepancy: draft contradicts or misstates the reference
+- discrepancy: the draft directly contradicts a fact in the reference
 - grammar: clear grammatical errors
 - formatting: broken structure, awkward line breaks, or unfilled gap markers left as \
 [YOUR VOICE: ...]
-- factualness: claims not supported by the reference (invented work, metrics, or outcomes)
+- factualness: a concrete, checkable claim that is fabricated or contradicts the reference, \
+such as invented metrics, numbers, named outcomes, or achievements the reference does not \
+support
 - length: under 120 words or over 220 words when gap markers are treated as filled
+
+Do not flag the author's own interpretive or experiential content. Their motivations, \
+feelings, design reasoning, process narrative (for example deciding to redesign or to keep \
+more manual involvement), opinions, lessons, and reflective takeaways are theirs to make and \
+cannot be verified against a commit log. The reference is a high-level summary, not an \
+exhaustive spec, so a detail being absent from the reference is not by itself grounds for a \
+factualness flag. Flag factualness only when a specific, checkable claim conflicts with the \
+reference or is a fabricated metric or outcome that would mislead a reader. When unsure \
+whether something is a subjective reflection or a factual claim, do not flag it.
 
 Rules:
 - Be specific. Each flag needs a short message and an optional excerpt from the draft.
