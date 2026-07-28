@@ -390,11 +390,15 @@ def cmd_retry(args):
     meta, body = _read_draft(path)
     if meta.get("status") != "failed":
         raise SystemExit("Only failed drafts can be retried.")
+    prior_error = meta.get("publish_error", "")
     meta["status"] = "queued"
     meta.pop("publish_error", None)
     meta.pop("failed_at", None)
     _write_draft(meta, body, path)
     print(f"Reset {args.id} to queued. Run publish when due.")
+    if "unknown outcome" in prior_error:
+        print("Warning: the previous attempt had an unknown outcome. Confirm this post is NOT")
+        print("already live on LinkedIn before publishing again, to avoid a duplicate.")
 
 
 def cmd_publish(_args):

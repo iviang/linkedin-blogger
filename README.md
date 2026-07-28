@@ -33,22 +33,24 @@ publishes without your approval.
 This repo is being built up to the pipeline above. Be honest with yourself about what runs
 today versus what is still designed.
 
-**Working today**
+**Verified at runtime**
 
 - LinkedIn OAuth login (personal profile, `w_member_social` + OpenID Connect)
-- Draft a post from a single `activity_log.md` using Claude
-- Review, edit, and approve drafts locally
-- Publish approved text posts through the official LinkedIn API
+- `list`, GitHub activity preview (`activity`), and the legacy one-shot `draft` flow
 
-**Designed, not yet built**
+**Built and compiling, not yet end-to-end tested**
 
-- The AI agent log and the merged reference file (since-last-post window)
-- Multi-idea brainstorm with select or reshuffle
-- Skeleton draft with fill-in gaps
-- The error-check loop and preview
-- Media attachment
-- Publish queue with the 15-minute edit lock
-- The weekly "come write your post" email nudge
+- Ingestion: an AI agent log synthesized from GitHub activity plus notes, merged into
+  `reference.md` for the since-last-post window (`ingest`)
+- Processing: multi-idea brainstorm with select/reshuffle, skeleton-with-gaps, and the
+  error-check loop (`brainstorm`, `select`, `reshuffle`, `skeleton`, `check`, `override`,
+  `preview`)
+- Deliverable: publish queue with the 15-minute edit lock, media attachment, scheduled
+  publish, and the weekly email nudge (`approve`, `schedule`, `queue`, `attach`, `publish`,
+  `nudge`)
+
+The full flow still needs an end-to-end runtime test on a machine with dependencies
+installed.
 
 ## Prerequisites
 
@@ -57,8 +59,8 @@ today versus what is still designed.
   *Sign In with LinkedIn using OpenID Connect* and *Share on LinkedIn* products, and a
   `http://localhost:8000/callback` redirect URL.
 - **An Anthropic API key** with a few dollars of credit.
-- **A GitHub personal access token** (read-only), for the agent log. *(planned)*
-- **A Gmail app password**, for the weekly email nudge over SMTP. *(planned)*
+- **A GitHub personal access token** (read-only: Contents + Pull requests), for the agent log.
+- **A Gmail app password**, for the weekly email nudge over SMTP.
 - **A `.env` file** holding the above (gitignored), and **Task Scheduler** (or cron) for
   the weekly job.
 
@@ -83,18 +85,26 @@ authorize once:
 This opens LinkedIn in your browser. After you approve, tokens are cached in `tokens.json`
 (gitignored).
 
-## Usage (current)
+## Usage
+
+The full workflow, with a human at every judgment call:
 
 ```bash
-python blogger.py draft            # create a pending draft from your activity log
-python blogger.py list             # see all drafts and their status
-python blogger.py show <id>        # read one draft in full
-python blogger.py approve <id>     # mark it approved
-python blogger.py publish          # publish all approved drafts
+python blogger.py ingest              # build reference.md from your logs + GitHub
+python blogger.py brainstorm          # Claude proposes post ideas (default 3)
+python blogger.py select <n> --comment "direction"   # pick one (or: reshuffle)
+python blogger.py skeleton            # gap-filled draft to write into
+# fill every [YOUR VOICE: ...] gap in the draft file, then:
+python blogger.py check <id>          # error check against reference.md
+python blogger.py attach <id> <image> # optional media
+python blogger.py approve <id> --at 2026-08-03T09:00:00-07:00   # queue for a time
+python blogger.py queue               # see scheduled posts and lock state
+python blogger.py publish             # publish due queued posts (safe to schedule)
 ```
 
-You can edit a draft file in `drafts/` directly before approving, including changing
-`status: pending` to `status: approved` by hand.
+`list`, `show <id>`, `override <id> <flag>`, `schedule <id> --at ...`, `retry <id>`, and
+`nudge` round out the commands. The legacy `draft` still does a one-shot draft from
+`activity_log.md` without the brainstorm flow.
 
 ## Notes and limits
 

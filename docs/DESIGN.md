@@ -77,19 +77,27 @@ Data files (`.env`, `tokens.json`, `state.json`, `activity_log.md`, `agent_notes
 
 ## Build status
 
-**Working today**
+**Verified at runtime**
 
-- LinkedIn OAuth login (`login`)
-- Draft from a single `activity_log.md` (`draft`), review/list/show/approve, publish text
-- GitHub activity fetch and preview (`activity`) — Stage A step 1
-- Agent log synthesis and reference merge (`ingest`) — Stage A step 2
-- Processing (`brainstorm`, `select`, `reshuffle`, `skeleton`, `check`, `override`,
-  `preview`, `approve`) — Stage B
-- Deliverable queue (`queue`, `schedule`, `attach`, `retry`, `publish`, `nudge`) — Stage C
+- LinkedIn OAuth `login`, `list`, GitHub activity preview (`activity`), and the legacy
+  one-shot `draft` / `approve` / `publish` text flow.
+
+**Built and compiling, not yet end-to-end tested**
+
+- Stage A step 2: agent log synthesis + reference merge (`ingest`).
+- Stage B: `brainstorm`, `ideas`, `select`, `reshuffle`, `skeleton`, `check`, `override`,
+  `preview` (multi-idea, skeleton-with-gaps, error-check loop).
+- Stage C: `approve` / `schedule` / `queue` (15-minute lock), `attach` media, `publish`
+  (marks posted only on a confirmed URN, else failed, with unknown-outcome recorded safely),
+  `retry`, `nudge` email.
 
 **Next up**
 
-- Hardening: recover drafts stuck in `posting` after a crash; optional video media.
+- End-to-end runtime test of the full flow: ingest -> brainstorm -> select -> skeleton ->
+  check -> approve -> publish, on a machine with dependencies installed.
+- Wire the weekly schedule (Task Scheduler): `nudge --prepare` weekly, plus a recurring
+  `publish` so due queued posts go out.
+- Optional: video media.
 
 ## Prerequisites and secrets (in `.env`)
 

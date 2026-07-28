@@ -106,6 +106,18 @@ def publish_draft(meta: dict, body: str, write_draft) -> bool:
         write_draft(meta, body)
         print(f"  failed: {exc}")
         return False
+    except Exception as exc:
+        # A network drop or timeout must not leave the draft stuck in "posting" (no
+        # recovery path). Record it as failed so it is recoverable, but a timeout can
+        # happen *after* LinkedIn accepted the post, so the outcome is genuinely unknown:
+        # warn the owner to verify on LinkedIn before retrying, to avoid a double post.
+        # SystemExit/KeyboardInterrupt derive from BaseException and are not caught here.
+        meta["status"] = "failed"
+        meta["publish_error"] = f"unknown outcome (verify on LinkedIn before retry): {exc}"
+        meta["failed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        write_draft(meta, body)
+        print(f"  failed with unknown outcome, check LinkedIn before retrying: {exc}")
+        return False
 
     posted_at = datetime.now(timezone.utc)
     meta["status"] = "posted"
