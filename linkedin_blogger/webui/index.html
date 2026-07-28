@@ -17,7 +17,6 @@
             --ok:#46C79C; --ok-bg:#123528; --ok-ink:#7FE0BF; --warn:#E0A45E; --warn-bg:#3A2A17; --warn-ink:#F0C48D; }
   }
   * { box-sizing: border-box; }
-  /* The `hidden` attribute must win over class rules that set display (flex/block). */
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; color-scheme: light dark; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -37,7 +36,7 @@
   .brand h1 { font-size: 15px; margin: 0; line-height: 1.15; }
   .brand .sub { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
 
-  .stepper { list-style: none; margin: 0 0 20px; padding: 0; position: relative; }
+  .stepper { list-style: none; margin: 0 0 18px; padding: 0; position: relative; }
   .stepper::before { content: ""; position: absolute; left: 14px; top: 14px; bottom: 14px; width: 2px; background: var(--line2); }
   .step { position: relative; display: flex; gap: 12px; align-items: center; padding: 7px 0; cursor: pointer; }
   .step:hover .step-label { color: var(--ink); }
@@ -51,15 +50,29 @@
   .chip { font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line2); color: var(--muted); text-align: center; }
   .chip.ok { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
   .chip.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: transparent; }
+
+  .side-sec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; }
+  .side-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .qlist { display: flex; flex-direction: column; gap: 2px; }
+  .qitem { padding: 8px 9px; border-radius: 8px; cursor: pointer; }
+  .qitem:hover { background: var(--raise); }
+  .qi-t { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+  .qi-m { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 3px; }
   .sidenote { font-size: 11.5px; color: var(--faint); margin: 16px 2px 0; line-height: 1.5; }
-  .sidenote code { font-family: var(--mono); background: var(--navy-soft); color: var(--navy); padding: 1px 5px; border-radius: 5px; }
+  .sidenote code, .sidenote .kbd { font-family: var(--mono); background: var(--navy-soft); color: var(--navy); padding: 1px 5px; border-radius: 5px; }
 
   /* stage panels */
   .phead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
   .phead h2 { font-size: 14px; margin: 0; }
+  .phead-r { display: flex; align-items: center; gap: 10px; }
+  .estatus { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
   .compose { padding: 20px 22px; }
-  .compose .eyebrow { display: block; margin-bottom: 6px; }
-  .compose h2 { font-size: 21px; margin: 0 0 3px; letter-spacing: -.01em; }
+  .compose-head { cursor: pointer; }
+  .compose-head .eyebrow { display: block; margin-bottom: 6px; }
+  .compose-head h2 { font-size: 21px; margin: 0; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+  .caret { font-size: 13px; color: var(--faint); }
+  .compose-body { margin-top: 14px; }
+  .compose.collapsed .compose-body { display: none; }
   .compose .lead { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 60ch; }
   .count { font-size: 12px; color: var(--faint); font-family: var(--mono); }
   .count.busy { color: var(--navy); }
@@ -111,33 +124,37 @@
   .note.warn { color: var(--warn-ink); }
   .note.ok { color: var(--ok-ink); }
   .eactions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
-  .grow { flex: 1 1 160px; }
+  .grow { flex: 1 1 140px; }
 
   .ref { margin: 12px 0 0; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; background: var(--raise); max-height: 340px; overflow: auto; }
 
-  /* inline editor */
-  .phead-r { display: flex; align-items: center; gap: 10px; }
-  .picker { font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); max-width: 280px; }
-  .ebody { padding: 18px 20px; }
-  .estatus { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 14px; }
-  .spellrow { margin-top: 9px; }
-  .spellpill { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
-  .spellpill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  /* editor: two columns (main + error-check side) */
+  .editgrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; padding: 18px 20px; }
+  @media (max-width: 1080px) { .editgrid { grid-template-columns: 1fr; } }
+  .editmain { min-width: 0; }
+  .editside { border: 1px solid var(--line); border-radius: 11px; background: var(--raise); padding: 14px 16px; align-self: start; }
+  .side-h2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .side-h2 h3 { font-size: 14px; margin: 0; }
+  .gate { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .gate .eyebrow { display: block; margin-bottom: 10px; }
+
   .etitle { width: 100%; font: inherit; font-size: 18px; font-weight: 650; letter-spacing: -.01em; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); margin-bottom: 15px; }
   .etitle:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
   .epost { width: 100%; font: inherit; font-size: 14px; line-height: 1.6; padding: 13px 14px; border: 1px solid var(--line2); border-radius: 10px; background: var(--raise); color: var(--ink); resize: vertical; min-height: 230px; }
   .epost:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
+  .spellrow { margin-top: 9px; }
+  .spellpill { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
+  .spellpill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
   .lock { font-size: 12.5px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 9px; padding: 9px 12px; margin-bottom: 14px; }
 
-  .flags { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; }
-  .flag { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 9px; padding: 11px 13px; background: var(--raise); }
+  .flags { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+  .flag { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: var(--surface); }
   .flag.ovr { border-left-color: var(--ok); opacity: .85; }
   .flag-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
   .flag-cat { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn-ink); }
   .flag-msg { font-size: 13px; margin-top: 6px; line-height: 1.45; }
-  .flag-ex { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  .flag-ex { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 6px; background: var(--raise); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
 
-  .sched { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; }
   .media { margin-top: 18px; }
   .drop { border: 1.5px dashed var(--line2); border-radius: 10px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; background: var(--raise); }
   .drop:hover, .drop.over { border-color: var(--navy); color: var(--navy); background: var(--navy-soft); }
@@ -148,9 +165,7 @@
   .gwarn { color: var(--warn-ink); font-size: 12px; margin-top: 6px; }
   .mwarn { color: var(--warn-ink); background: var(--warn-bg); border-radius: 9px; padding: 9px 12px; font-size: 12.5px; margin-top: 10px; }
   .alt { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); }
-  .describe-btn { }
 
-  /* linkedin preview card */
   .pv { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
   .pv-head { display: flex; gap: 11px; align-items: center; padding: 13px 15px; }
   .pv-av { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); color: #F5F3EC; display: grid; place-items: center; font-weight: 700; font-size: 15px; flex: none; overflow: hidden; }
@@ -165,9 +180,9 @@
 </style>
 </head>
 <body>
-  <h2 class="sr-only">LinkedIn Blogger. A left pipeline stepper links to the compose, drafts, and queue sections.
-    The compose card ingests notes, brainstorms ideas, and writes a skeleton. Clicking a draft opens an editor with
-    an error check, media, a LinkedIn-style preview, scheduling, and publish.</h2>
+  <h2 class="sr-only">LinkedIn Blogger. A left sidebar has the pipeline stepper, status, the publish queue, and
+    settings. The main area has a collapsible compose card and an always-open editor with an error-check side panel,
+    media, a LinkedIn-style preview, scheduling, and publish.</h2>
 
   <div class="app">
     <aside class="panel sidebar">
@@ -179,33 +194,53 @@
       <ol class="stepper" id="stepper">
         <li class="step" data-scroll="newPost"><span class="dot">1</span><span class="step-label">Ingest notes</span></li>
         <li class="step" data-scroll="newPost"><span class="dot">2</span><span class="step-label">Brainstorm ideas</span></li>
-        <li class="step" data-scroll="draftsPanel"><span class="dot">3</span><span class="step-label">Write draft</span></li>
-        <li class="step" data-scroll="draftsPanel"><span class="dot">4</span><span class="step-label">Error check</span></li>
-        <li class="step" data-scroll="queuePanel"><span class="dot">5</span><span class="step-label">Queue &amp; publish</span></li>
+        <li class="step" data-scroll="editorPanel"><span class="dot">3</span><span class="step-label">Write draft</span></li>
+        <li class="step" data-scroll="editorPanel"><span class="dot">4</span><span class="step-label">Error check</span></li>
+        <li class="step" data-scroll="editorPanel"><span class="dot">5</span><span class="step-label">Queue &amp; publish</span></li>
       </ol>
 
       <div class="chips" id="chips"><span class="chip">loading&hellip;</span></div>
-      <p class="sidenote">Running locally. Nothing publishes without your approval. Stop the server with <code>Ctrl+C</code>.</p>
+
+      <div class="side-sec">
+        <div class="side-h"><span class="eyebrow">In queue</span><span class="count" id="queueCount"></span></div>
+        <div class="qlist" id="queue"><p class="empty">Loading&hellip;</p></div>
+      </div>
+
+      <div class="side-sec">
+        <div class="side-h"><span class="eyebrow">Settings</span></div>
+        <label class="elabel" for="freq">Post every N days by default</label>
+        <div class="eactions" style="margin-top: 6px;">
+          <input class="etime" id="freq" type="number" min="1" max="365" style="width: 64px;">
+          <button class="btn" id="freqSave">Save</button>
+        </div>
+        <span class="note" id="freqNote" style="display: block; margin-top: 7px;"></span>
+      </div>
+
+      <p class="sidenote">Running locally. Nothing publishes without your approval. Stop with <span class="kbd">Ctrl+C</span>.</p>
     </aside>
 
     <div class="stage">
       <section class="panel compose" id="newPost">
-        <span class="eyebrow">Stages 1&ndash;2 &middot; Ingest &amp; brainstorm</span>
-        <h2>Start a post</h2>
-        <p class="lead">Pull your activity since the last post into a reference, brainstorm angles from it, then write a skeleton to fill in your own voice.</p>
-        <div class="flow">
-          <button class="btn" id="ingestBtn">1 &middot; Run ingest</button>
-          <button class="btn" id="refBtn">View reference</button>
-          <button class="btn" id="brainstormBtn">2 &middot; Brainstorm ideas</button>
-          <button class="btn" id="reshuffleBtn" hidden>Reshuffle</button>
-          <span class="count grow" id="flowMsg"></span>
+        <div class="compose-head" id="composeHead">
+          <span class="eyebrow">Stages 1&ndash;2 &middot; Ingest &amp; brainstorm</span>
+          <h2>Start a post <span class="caret" id="composeCaret">&#9662;</span></h2>
         </div>
-        <pre class="ref" id="reference" hidden></pre>
-        <div class="ideas" id="ideas"></div>
-        <div id="skeletonStep" hidden>
-          <label class="dirlabel" for="direction">Direction for the draft (optional)</label>
-          <textarea class="dir" id="direction" rows="2" placeholder="Any angle, emphasis, or tone to steer the skeleton"></textarea>
-          <button class="btn primary" id="skeletonBtn" disabled>3 &middot; Create skeleton draft</button>
+        <div class="compose-body" id="composeBody">
+          <p class="lead">Pull your activity since the last post into a reference, brainstorm angles from it, then write a skeleton to fill in your own voice. Or just start writing in the editor below.</p>
+          <div class="flow">
+            <button class="btn" id="ingestBtn">1 &middot; Run ingest</button>
+            <button class="btn" id="refBtn">View reference</button>
+            <button class="btn" id="brainstormBtn">2 &middot; Brainstorm ideas</button>
+            <button class="btn" id="reshuffleBtn" hidden>Reshuffle</button>
+            <span class="count grow" id="flowMsg"></span>
+          </div>
+          <pre class="ref" id="reference" hidden></pre>
+          <div class="ideas" id="ideas"></div>
+          <div id="skeletonStep" hidden>
+            <label class="dirlabel" for="direction">Direction for the draft (optional)</label>
+            <textarea class="dir" id="direction" rows="2" placeholder="Any angle, emphasis, or tone to steer the skeleton"></textarea>
+            <button class="btn primary" id="skeletonBtn" disabled>3 &middot; Create skeleton draft</button>
+          </div>
         </div>
       </section>
 
@@ -213,88 +248,67 @@
         <div class="phead">
           <h2>Editor</h2>
           <div class="phead-r">
-            <select id="draftPicker" class="picker" aria-label="Choose a draft to edit">
-              <option value="">Select a draft&hellip;</option>
-            </select>
-            <button class="btn" id="eClose" hidden>Close</button>
+            <span class="estatus" id="eId">New post</span>
+            <button class="btn" id="newDraftBtn">New</button>
           </div>
         </div>
-        <p class="empty" id="editorEmpty" style="padding: 16px 18px; margin: 0;">Pick a draft above, or click one in the lists below, to edit it here.</p>
-        <div class="ebody" id="editorBody" hidden>
-          <div class="estatus" id="eId"></div>
-          <div class="lock" id="eLock" hidden></div>
-          <label class="elabel" for="eTitle">Title</label>
-          <input class="etitle" id="eTitle" type="text">
-          <label class="elabel" for="ePost">Post body</label>
-          <textarea class="epost" id="ePost" spellcheck="true"></textarea>
-          <div class="spellrow"><span class="spellpill">Spell check on</span></div>
+        <div class="editgrid">
+          <div class="editmain">
+            <div class="lock" id="eLock" hidden></div>
+            <label class="elabel" for="eTitle">Title</label>
+            <input class="etitle" id="eTitle" type="text" placeholder="Give the post a title">
+            <label class="elabel" for="ePost">Post body</label>
+            <textarea class="epost" id="ePost" spellcheck="true" placeholder="Start writing. Your post saves automatically as a draft."></textarea>
+            <div class="spellrow"><span class="spellpill">Spell check on</span></div>
 
-          <div class="media">
-            <label class="elabel">Photos or video (optional)</label>
-            <div class="drop" id="eDrop">Drag media here, or click to choose. Photos (JPG, PNG, GIF) or a video (MP4).</div>
-            <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif,video/mp4,video/quicktime" multiple hidden>
-            <div class="mwarn" id="eMediaWarn" hidden></div>
-            <div class="gallery" id="eGallery"></div>
-          </div>
-
-          <div class="eactions">
-            <button class="btn primary" id="eSave">Save</button>
-            <button class="btn" id="eCheck">Run check</button>
-            <span class="note grow" id="eNote"></span>
-          </div>
-          <div class="flags" id="eFlags"></div>
-
-          <div class="eactions">
-            <button class="btn" id="ePreviewBtn">Show preview</button>
-            <span class="note grow">See it as it will appear on LinkedIn</span>
-          </div>
-          <div class="pv" id="ePreview" hidden>
-            <div class="pv-head">
-              <div class="pv-av" id="pvAv">VN</div>
-              <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+            <div class="media">
+              <label class="elabel">Photos or video (optional)</label>
+              <div class="drop" id="eDrop">Drag media here, or click to choose. Photos (JPG, PNG, GIF) or a video (MP4).</div>
+              <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif,video/mp4,video/quicktime" multiple hidden>
+              <div class="mwarn" id="eMediaWarn" hidden></div>
+              <div class="gallery" id="eGallery"></div>
             </div>
-            <div class="pv-text" id="pvText"></div>
-            <div class="pv-imgs" id="pvImgs"></div>
-            <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
-          </div>
 
-          <div class="sched">
-            <label class="elabel" for="eWhen">Schedule</label>
             <div class="eactions">
-              <input class="etime" id="eWhen" type="datetime-local">
-              <button class="btn" id="eSchedule">Set schedule</button>
-              <button class="btn danger" id="eDelete">Delete</button>
-              <span class="note grow" id="eSchedNote"></span>
+              <button class="btn primary" id="eSave">Save</button>
+              <button class="btn" id="ePreviewBtn">Show preview</button>
             </div>
-            <div class="eactions" style="margin-top: 12px;">
-              <button class="btn primary" id="ePublish">Publish now</button>
-              <span class="note grow" id="ePubNote"></span>
+            <div class="pv" id="ePreview" hidden>
+              <div class="pv-head">
+                <div class="pv-av" id="pvAv">VN</div>
+                <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+              </div>
+              <div class="pv-text" id="pvText"></div>
+              <div class="pv-imgs" id="pvImgs"></div>
+              <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
             </div>
           </div>
+
+          <aside class="editside">
+            <div class="side-h2"><h3>Error check</h3><button class="btn primary" id="eCheck">Run check</button></div>
+            <span class="note" id="eNote"></span>
+            <div class="flags" id="eFlags"></div>
+
+            <div class="gate">
+              <span class="eyebrow">Queue for publishing</span>
+              <div class="eactions" style="margin-top: 0;">
+                <input class="etime grow" id="eWhen" type="datetime-local">
+              </div>
+              <div class="eactions">
+                <button class="btn primary" id="eSchedule">Queue</button>
+                <button class="btn" id="ePublish">Publish now</button>
+              </div>
+              <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
+              <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
+              <div class="eactions"><button class="btn danger" id="eDelete">Delete draft</button></div>
+            </div>
+          </aside>
         </div>
       </section>
 
       <section class="panel" id="draftsPanel">
         <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
         <div class="list" id="drafts"><p class="empty">Loading&hellip;</p></div>
-      </section>
-
-      <section class="panel" id="queuePanel">
-        <div class="phead"><h2>Queue</h2><span class="count" id="queueCount"></span></div>
-        <div class="list" id="queue"><p class="empty">Loading&hellip;</p></div>
-      </section>
-
-      <section class="panel">
-        <div class="phead"><h2>Settings</h2></div>
-        <div class="list">
-          <label class="elabel" for="freq">Post every N days (default when you queue a post without a time)</label>
-          <div class="eactions">
-            <input class="etime" id="freq" type="number" min="1" max="365" style="width: 84px;">
-            <span class="note">days</span>
-            <button class="btn" id="freqSave">Save</button>
-            <span class="note grow" id="freqNote"></span>
-          </div>
-        </div>
       </section>
     </div>
   </div>
@@ -335,6 +349,16 @@
       }).join("");
     }
 
+    function renderQueue(items) {
+      var el = document.getElementById("queue");
+      if (!items.length) { el.innerHTML = '<p class="empty">Queue is empty.</p>'; return; }
+      el.innerHTML = items.map(function (it) {
+        var when = it.scheduled_at ? new Date(it.scheduled_at).toLocaleString() : "unscheduled";
+        return '<div class="qitem" data-id="' + esc(it.id) + '"><div class="qi-t">' +
+          esc(it.title || "(untitled)") + '</div><div class="qi-m">' + esc(when) + "</div></div>";
+      }).join("");
+    }
+
     async function load() {
       try {
         var s = await getJSON("/api/status");
@@ -349,18 +373,9 @@
         document.getElementById("queueCount").textContent = s.queued_count + " scheduled";
 
         var d = await getJSON("/api/drafts");
-        renderList("drafts", d.drafts, "No drafts yet. Run <code>ingest</code>, then <code>brainstorm</code>.");
+        renderList("drafts", d.drafts, "No drafts yet. Brainstorm above, or just write in the editor.");
         var q = await getJSON("/api/queue");
-        renderList("queue", q.queue, "Queue is empty.");
-
-        // Keep the draft picker in sync with both lists, preserving the current selection.
-        var all = d.drafts.concat(q.queue);
-        var picker = document.getElementById("draftPicker");
-        var cur = picker.value;
-        picker.innerHTML = '<option value="">Select a draft&hellip;</option>' + all.map(function (it) {
-          return '<option value="' + esc(it.id) + '">' + esc(it.title || "(untitled)") + " — " + esc(it.status) + "</option>";
-        }).join("");
-        picker.value = cur;
+        renderQueue(q.queue);
       } catch (e) {
         document.getElementById("chips").innerHTML = '<span class="chip warn">could not reach server</span>';
       }
@@ -446,11 +461,12 @@
       try {
         await postJSON("/api/select", { index: selectedIdea, comment: document.getElementById("direction").value });
         var r = await postJSON("/api/skeleton");
-        flowMsg("Draft " + r.id + " created. Open it below to fill the [YOUR VOICE] gaps.");
+        flowMsg("Draft " + r.id + " created and opened below.");
         renderIdeas([], null);
         document.getElementById("direction").value = "";
         selectedIdea = null;
         load();
+        openEditor(r.id); // auto-open the new skeleton in the editor
       } catch (e) {
         flowMsg(e.message, "err");
         this.disabled = false;
@@ -460,7 +476,7 @@
     function freqNote(text, cls) {
       var el = document.getElementById("freqNote");
       el.textContent = text || "";
-      el.className = "note grow" + (cls ? " " + cls : "");
+      el.className = "note" + (cls ? " " + cls : "");
     }
     var profile = { name: null, picture: null };
     async function loadProfile() {
@@ -492,25 +508,40 @@
       } catch (e) { /* no session yet; ignore */ }
     }
 
+    // Compose collapse
+    function setComposeCollapsed(collapsed) {
+      document.getElementById("newPost").classList.toggle("collapsed", collapsed);
+      document.getElementById("composeCaret").innerHTML = collapsed ? "&#9656;" : "&#9662;";
+    }
+    document.getElementById("composeHead").addEventListener("click", function () {
+      setComposeCollapsed(!document.getElementById("newPost").classList.contains("collapsed"));
+    });
+
     // --- draft editor ---
     var currentDraftId = null;
     var currentStatus = null;
     var currentMedia = [];
     var saveTimer = null;
+    var createPromise = null;
 
     function eNote(text, cls) {
       var el = document.getElementById("eNote");
       el.textContent = text || "";
-      el.className = "note grow" + (cls ? " " + cls : "");
+      el.className = "note" + (cls ? " " + cls : "");
     }
     function eSchedNote(text, cls) {
       var el = document.getElementById("eSchedNote");
       el.textContent = text || "";
-      el.className = "note grow" + (cls ? " " + cls : "");
+      el.className = "note" + (cls ? " " + cls : "");
+      el.style.display = "block";
+    }
+    function ePubNote(text, cls) {
+      var el = document.getElementById("ePubNote");
+      el.textContent = text || "";
+      el.className = "note" + (cls ? " " + cls : "");
+      el.style.display = "block";
     }
     function pad2(n) { return String(n).padStart(2, "0"); }
-    // datetime-local gives naive local time; send it with the browser's real offset so the
-    // server stores the instant the owner meant, not the same wall-clock read as UTC.
     function toISOWithOffset(localValue) {
       var d = new Date(localValue);
       var off = -d.getTimezoneOffset();
@@ -553,9 +584,42 @@
       });
     }
 
+    // Blank freestyle state: editor open, no draft yet.
+    function resetEditor() {
+      currentDraftId = null; currentStatus = null; currentMedia = []; createPromise = null;
+      document.getElementById("eId").textContent = "New post — freestyle";
+      document.getElementById("eLock").hidden = true;
+      document.getElementById("eTitle").value = ""; document.getElementById("eTitle").disabled = false;
+      document.getElementById("ePost").value = ""; document.getElementById("ePost").readOnly = false;
+      document.getElementById("eSave").disabled = false;
+      document.getElementById("eCheck").disabled = false;
+      document.getElementById("eFlags").innerHTML = "";
+      eNote("Start writing. Your post saves automatically as a draft.");
+      document.getElementById("eGallery").innerHTML = "";
+      document.getElementById("eMediaWarn").hidden = true;
+      var drop = document.getElementById("eDrop"); drop.style.pointerEvents = ""; drop.style.opacity = "";
+      document.getElementById("eWhen").value = ""; document.getElementById("eWhen").disabled = false;
+      var sb = document.getElementById("eSchedule"); sb.textContent = "Queue"; sb.disabled = true;
+      document.getElementById("eDelete").disabled = true;
+      document.getElementById("ePublish").disabled = true;
+      eSchedNote("Start typing to save the draft, then you can schedule it."); ePubNote("");
+      document.getElementById("ePreview").hidden = true; document.getElementById("ePreviewBtn").textContent = "Show preview";
+    }
+
+    // After a freestyle draft is first saved, adopt its id without disturbing the text.
+    function adoptCreatedDraft(detail) {
+      currentDraftId = detail.id; currentStatus = detail.status; currentMedia = detail.media || [];
+      document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
+      document.getElementById("eSchedule").disabled = false;
+      document.getElementById("eDelete").disabled = false;
+      document.getElementById("ePublish").disabled = false;
+      eSchedNote("Not scheduled. Leave the time empty to auto-space it after the queue.");
+    }
+
     function fillEditor(detail) {
       currentDraftId = detail.id;
       currentStatus = detail.status;
+      createPromise = null;
       document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
       document.getElementById("eTitle").value = detail.title || "";
       document.getElementById("ePost").value = detail.body || "";
@@ -569,7 +633,6 @@
       document.getElementById("eCheck").disabled = ro;
       renderCheck(detail);
 
-      // Schedule + delete
       var when = document.getElementById("eWhen");
       when.value = detail.scheduled_at ? toLocalInput(detail.scheduled_at) : "";
       when.disabled = ro;
@@ -577,13 +640,11 @@
       var schedBtn = document.getElementById("eSchedule");
       schedBtn.textContent = queued ? "Update schedule" : "Queue";
       schedBtn.disabled = ro;
-      document.getElementById("eDelete").disabled =
-        detail.status === "posted" || detail.status === "posting";
+      document.getElementById("eDelete").disabled = detail.status === "posted" || detail.status === "posting";
       eSchedNote(detail.scheduled_at
         ? "Currently " + new Date(detail.scheduled_at).toLocaleString()
         : "Not scheduled. Leave the time empty to auto-space it after the queue.");
 
-      // Photos
       currentMedia = detail.media || [];
       var drop = document.getElementById("eDrop");
       drop.style.pointerEvents = ro ? "none" : "";
@@ -597,57 +658,57 @@
         mw.hidden = true;
       }
 
-      // Publish now: only a ready, unposted draft
       var pubBtn = document.getElementById("ePublish");
       pubBtn.disabled = detail.status === "posted" || detail.status === "posting" || detail.status === "skeleton";
       ePubNote(detail.status === "posted" ? "Already posted." : "");
 
-      // Reset preview each time a draft opens
       document.getElementById("ePreview").hidden = true;
       document.getElementById("ePreviewBtn").textContent = "Show preview";
-    }
-
-    function ePubNote(text, cls) {
-      var el = document.getElementById("ePubNote");
-      el.textContent = text || "";
-      el.className = "note grow" + (cls ? " " + cls : "");
     }
 
     async function openEditor(id) {
       // Flush a pending autosave for whatever draft is open before switching to another.
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await flushSave(); }
-      document.getElementById("editorEmpty").hidden = true;
-      document.getElementById("editorBody").hidden = false;
-      document.getElementById("eClose").hidden = false;
+      createPromise = null;
       document.getElementById("eFlags").innerHTML = "";
       eNote("Loading…", "busy");
+      setComposeCollapsed(true);
       try {
         var detail = await getJSON("/api/drafts/" + encodeURIComponent(id));
         if (detail.error) throw new Error(detail.error);
         fillEditor(detail);
-        document.getElementById("draftPicker").value = id;
         document.getElementById("editorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (e) { eNote(e.message, "warn"); }
     }
 
-    function closeEditor() {
+    function newDraft() {
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushSave(); }
-      document.getElementById("editorBody").hidden = true;
-      document.getElementById("editorEmpty").hidden = false;
-      document.getElementById("eClose").hidden = true;
-      document.getElementById("draftPicker").value = "";
-      currentDraftId = null;
+      resetEditor();
+      setComposeCollapsed(true);
+      document.getElementById("editorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("ePost").focus();
     }
+    document.getElementById("newDraftBtn").addEventListener("click", newDraft);
 
     async function saveDraft() {
-      return postJSON("/api/drafts/" + encodeURIComponent(currentDraftId), {
-        body: document.getElementById("ePost").value,
-        title: document.getElementById("eTitle").value,
-      });
+      if (currentDraftId) {
+        return postJSON("/api/drafts/" + encodeURIComponent(currentDraftId), {
+          body: document.getElementById("ePost").value,
+          title: document.getElementById("eTitle").value,
+        });
+      }
+      // Freestyle: create the draft on first save. Dedupe concurrent autosaves via one promise.
+      if (!createPromise) {
+        createPromise = postJSON("/api/drafts/new", {
+          title: document.getElementById("eTitle").value,
+          body: document.getElementById("ePost").value,
+        }).then(function (d) {
+          adoptCreatedDraft(d); load(); return d;
+        }).catch(function (e) { createPromise = null; throw e; });
+      }
+      return createPromise;
     }
 
-    // Autosave: a debounced write on idle. It does not re-render the editor (that would
-    // fight the cursor while typing); it just persists and refreshes the lists.
     function scheduleAutosave() {
       if (saveTimer) clearTimeout(saveTimer);
       eNote("Editing…");
@@ -655,7 +716,10 @@
     }
     async function flushSave() {
       saveTimer = null;
-      if (!currentDraftId) return;
+      // Don't create a junk draft from an empty freestyle editor.
+      if (!currentDraftId &&
+          !document.getElementById("ePost").value.trim() &&
+          !document.getElementById("eTitle").value.trim()) return;
       try {
         await saveDraft();
         eNote("Saved. Re-run check if you changed the wording.", "ok");
@@ -664,14 +728,9 @@
     }
     document.getElementById("ePost").addEventListener("input", scheduleAutosave);
     document.getElementById("eTitle").addEventListener("input", scheduleAutosave);
-
-    document.getElementById("eClose").addEventListener("click", closeEditor);
-    document.getElementById("draftPicker").addEventListener("change", function () {
-      if (this.value) openEditor(this.value); else closeEditor();
-    });
+    document.getElementById("ePost").addEventListener("focus", function () { setComposeCollapsed(true); });
 
     document.getElementById("eSave").addEventListener("click", async function () {
-      if (!currentDraftId) return;
       this.disabled = true;
       eNote("Saving…", "busy");
       try { fillEditor(await saveDraft()); load(); }
@@ -680,11 +739,10 @@
     });
 
     document.getElementById("eCheck").addEventListener("click", async function () {
-      if (!currentDraftId) return;
       this.disabled = true;
       eNote("Checking against reference…", "busy");
       try {
-        await saveDraft(); // check the text on screen, not a stale file
+        await saveDraft(); // check the text on screen, and create the draft first if freestyle
         fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/check", {}));
         load();
       } catch (e) { eNote(e.message, "warn"); }
@@ -721,16 +779,17 @@
       eSchedNote("Deleting…", "busy");
       try {
         if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-        var r = await fetch("/api/drafts/" + encodeURIComponent(currentDraftId), { method: "DELETE" });
+        var did = currentDraftId;
+        currentDraftId = null; // stop any flush for the deleted draft
+        var r = await fetch("/api/drafts/" + encodeURIComponent(did), { method: "DELETE" });
         var data = await r.json();
         if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
-        currentDraftId = null; // stop closeEditor from flushing a save for a deleted draft
-        closeEditor();
+        resetEditor();
         load();
       } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
     });
 
-    // Photos: a gallery with per-photo alt text and remove, plus drag-and-drop to add more
+    // Photos
     function mediaUrl(i) {
       return "/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "?t=" + Date.now();
     }
@@ -813,7 +872,7 @@
 
     var eDrop = document.getElementById("eDrop");
     var eFile = document.getElementById("eFile");
-    eDrop.addEventListener("click", function () { if (currentDraftId) eFile.click(); });
+    eDrop.addEventListener("click", function () { if (currentDraftId) eFile.click(); else eNote("Save the draft first (type something), then add media.", "warn"); });
     eFile.addEventListener("change", function () {
       if (this.files && this.files.length) uploadMedia(this.files);
       this.value = "";
@@ -827,7 +886,8 @@
     });
 
     async function uploadMedia(files) {
-      if (!currentDraftId || !files || !files.length) return;
+      if (!files || !files.length) return;
+      if (!currentDraftId) { eNote("Type something first so the draft is saved, then add media.", "warn"); return; }
       var fd = new FormData();
       for (var i = 0; i < files.length; i++) fd.append("file", files[i]);
       eNote(files.length > 1 ? ("Uploading " + files.length + " files…") : "Uploading…", "busy");
@@ -838,7 +898,6 @@
         if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
         fillEditor(data);
         load();
-        // Auto-generate alt text for any newly added photo that has none yet.
         var pending = [];
         currentMedia.forEach(function (m, idx) { if (m.kind !== "video" && !m.alt) pending.push(idx); });
         if (pending.length) {
@@ -855,7 +914,7 @@
       if (!currentDraftId) return;
       try {
         await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "/alt", { alt: val });
-        if (currentMedia[i]) currentMedia[i].alt = val; // keep preview in sync without a re-render
+        if (currentMedia[i]) currentMedia[i].alt = val;
       } catch (e) { eNote(e.message, "warn"); }
     }
 
@@ -867,7 +926,6 @@
       if (btn) { btn.disabled = true; btn.textContent = "Describing…"; }
       try {
         var r = await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "/describe", {});
-        // Update just this field, not the whole gallery, so other photos and the cursor are left alone.
         if (input) input.value = r.alt || "";
         if (currentMedia[i]) currentMedia[i].alt = r.alt || "";
       } catch (e) { eNote(e.message, "warn"); }
@@ -887,7 +945,7 @@
       } catch (e) { eNote(e.message, "warn"); }
     }
 
-    // Preview: a LinkedIn-style card rendered from the live text and attached photos
+    // Preview
     function renderPreview() {
       document.getElementById("pvText").textContent = document.getElementById("ePost").value;
       document.getElementById("pvName").textContent = profile.name || "You";
@@ -928,7 +986,6 @@
       if (!document.getElementById("ePreview").hidden) renderPreview();
     });
 
-    // Publish now: a single draft, immediately, bypassing its schedule
     document.getElementById("ePublish").addEventListener("click", async function () {
       if (!currentDraftId) return;
       if (!window.confirm("Publish draft " + currentDraftId + " to LinkedIn now? This posts publicly and cannot be undone from here.")) return;
@@ -944,26 +1001,29 @@
       } catch (e) { ePubNote(e.message, "warn"); this.disabled = false; }
     });
 
+    // Clicking a draft or queue item loads it into the editor.
     ["drafts", "queue"].forEach(function (id) {
       document.getElementById(id).addEventListener("click", function (e) {
-        var row = e.target.closest(".row[data-id]");
-        if (row) openEditor(row.getAttribute("data-id"));
+        var el = e.target.closest("[data-id]");
+        if (el) openEditor(el.getAttribute("data-id"));
       });
     });
 
-    document.getElementById("refBtn").addEventListener("click", async function () {
+    document.getElementById("refBtn").addEventListener("click", async function (e) {
+      e.stopPropagation(); // the compose header toggles collapse; keep this button independent
       var pre = document.getElementById("reference");
       var btn = this;
-      if (!pre.hidden) { pre.hidden = true; btn.textContent = "View"; return; }
+      if (!pre.hidden) { pre.hidden = true; btn.textContent = "View reference"; return; }
       var r = await getJSON("/api/reference");
       pre.textContent = r.exists ? r.content : "No reference yet. Run ingest to build it.";
       pre.hidden = false;
-      btn.textContent = "Hide";
+      btn.textContent = "Hide reference";
     });
 
-    // Sidebar stepper: scroll to the matching section and mark it active.
+    // Stepper: scroll to a section; the ingest/brainstorm steps also expand the compose card.
     Array.prototype.forEach.call(document.querySelectorAll(".step[data-scroll]"), function (step) {
       step.addEventListener("click", function () {
+        if (this.dataset.scroll === "newPost") setComposeCollapsed(false);
         var target = document.getElementById(this.dataset.scroll);
         if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
         Array.prototype.forEach.call(document.querySelectorAll(".step"), function (s) { s.classList.remove("active"); });
@@ -971,6 +1031,7 @@
       });
     });
 
+    resetEditor();
     load();
     loadIdeas();
     loadSettings();

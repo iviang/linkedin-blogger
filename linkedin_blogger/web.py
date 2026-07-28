@@ -216,6 +216,21 @@ def create_app() -> Flask:
             "lock_reason": lock_reason,
         }
 
+    @app.post("/api/drafts/new")
+    @guarded
+    def api_draft_new():
+        """Create a blank draft for freestyle writing (no skeleton). Returns its detail."""
+        data = request.get_json(silent=True) or {}
+        draft_id = drafts.new_draft_id()
+        meta = {
+            "id": draft_id,
+            "status": "pending",
+            "created": datetime.now().isoformat(timespec="seconds"),
+            "idea_title": (data.get("title") or "").strip(),
+        }
+        drafts.write_draft(meta, data.get("body") or "", drafts.draft_path(draft_id))
+        return _draft_detail(draft_id)
+
     @app.get("/api/drafts/<draft_id>")
     def api_draft_get(draft_id):
         detail = _draft_detail(draft_id)
