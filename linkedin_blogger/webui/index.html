@@ -681,6 +681,14 @@
           altTimer = setTimeout(function () { saveAlt(i, val); }, 700);
         });
 
+        var desc = document.createElement("button");
+        desc.className = "btn describe-btn";
+        desc.textContent = "Describe";
+        desc.style.marginTop = "8px";
+        desc.style.marginRight = "8px";
+        desc.disabled = ro;
+        desc.addEventListener("click", function () { describePhoto(i); });
+
         var rm = document.createElement("button");
         rm.className = "btn danger";
         rm.textContent = "Remove";
@@ -689,6 +697,7 @@
         rm.addEventListener("click", function () { removePhoto(i); });
 
         col.appendChild(alt);
+        col.appendChild(desc);
         col.appendChild(rm);
         item.appendChild(img);
         item.appendChild(col);
@@ -722,8 +731,17 @@
         var data = await r.json();
         if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
         fillEditor(data);
-        eNote(files.length > 1 ? "Photos added." : "Photo added.", "ok");
         load();
+        // Auto-generate alt text for any newly added photo that has none yet.
+        var pending = [];
+        currentMedia.forEach(function (m, idx) { if (!m.alt) pending.push(idx); });
+        if (pending.length) {
+          eNote("Describing " + pending.length + (pending.length > 1 ? " photos" : " photo") + " for screen readers…", "busy");
+          for (var k = 0; k < pending.length; k++) await describePhoto(pending[k]);
+          eNote("Alt text added. Edit any description you want to change.", "ok");
+        } else {
+          eNote(files.length > 1 ? "Photos added." : "Photo added.", "ok");
+        }
       } catch (e) { eNote(e.message, "warn"); }
     }
 
@@ -733,6 +751,21 @@
         await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "/alt", { alt: val });
         if (currentMedia[i]) currentMedia[i].alt = val; // keep preview in sync without a re-render
       } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function describePhoto(i) {
+      if (!currentDraftId) return;
+      var item = document.querySelectorAll("#eGallery .gitem")[i];
+      var input = item ? item.querySelector(".alt") : null;
+      var btn = item ? item.querySelector(".describe-btn") : null;
+      if (btn) { btn.disabled = true; btn.textContent = "Describing…"; }
+      try {
+        var r = await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "/describe", {});
+        // Update just this field, not the whole gallery, so other photos and the cursor are left alone.
+        if (input) input.value = r.alt || "";
+        if (currentMedia[i]) currentMedia[i].alt = r.alt || "";
+      } catch (e) { eNote(e.message, "warn"); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = "Describe"; } }
     }
 
     async function removePhoto(i) {

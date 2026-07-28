@@ -13,11 +13,12 @@ from pathlib import Path
 from flask import Flask, request, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 
-from . import agent_log, auth, config, drafts, processing, queue, state
+from . import agent_log, auth, config, drafts, llm, processing, queue, state
 
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
 UPLOADS_DIR = config.DRAFTS_DIR / "uploads"  # under gitignored drafts/, so photos never get committed
-ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif"}
+IMAGE_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif"}
+ALLOWED_IMAGE_EXTS = set(IMAGE_MEDIA_TYPES)
 
 # Two lanes on the dashboard. Once a draft is queued it leaves the Drafts list and lives in
 # the Queue; posted/posting drafts are done and show in neither.
@@ -408,6 +409,31 @@ def create_app() -> Flask:
         drafts.set_media(meta, media)
         drafts.write_draft(meta, body, path)
         return _draft_detail(draft_id)
+
+    @app.post("/api/drafts/<draft_id>/media/<int:index>/describe")
+    @guarded
+    def api_draft_media_describe(draft_id, index):
+        """Generate alt text for one photo with Claude's vision and save it."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        queue.assert_editable(meta)
+        media = drafts.get_media(meta)
+        if index < 0 or index >= len(media):
+            return {"error": "No photo at that position."}, 404
+        abspath = (config.BASE_DIR / media[index]["path"]).resolve()
+        base = config.BASE_DIR.resolve()
+        if base not in abspath.parents or not abspath.exists():
+            return {"error": "Media file missing."}, 404
+        media_type = IMAGE_MEDIA_TYPES.get(abspath.suffix.lower())
+        if not media_type:
+            return {"error": "Unsupported image type for description."}, 400
+        alt = llm.describe_image(abspath.read_bytes(), media_type)
+        media[index]["alt"] = alt
+        drafts.set_media(meta, media)
+        drafts.write_draft(meta, body, path)
+        return {"index": index, "alt": alt}
 
     @app.get("/api/drafts/<draft_id>/media/<int:index>")
     def api_draft_media_get(draft_id, index):
