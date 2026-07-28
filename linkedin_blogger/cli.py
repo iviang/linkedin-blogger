@@ -427,7 +427,7 @@ def cmd_publish(_args):
 
 
 def cmd_nudge(args):
-    nudge.send_nudge(prepare=args.prepare)
+    nudge.send_nudge(prepare=args.prepare, force=args.force)
 
 
 def main(argv=None):
@@ -512,11 +512,19 @@ def main(argv=None):
     sub.add_parser("queue", help="List drafts waiting to publish.").set_defaults(func=cmd_queue)
     sub.add_parser("publish", help="Publish due queued drafts (safe to cron).").set_defaults(func=cmd_publish)
 
-    nudge_cmd = sub.add_parser("nudge", help="Send the weekly email reminder.")
+    nudge_cmd = sub.add_parser(
+        "nudge",
+        help="Email a reminder if a post is due (a week after your last post). Run daily.",
+    )
     nudge_cmd.add_argument(
         "--prepare",
         action="store_true",
         help="Run ingest before sending so reference.md is fresh.",
+    )
+    nudge_cmd.add_argument(
+        "--force",
+        action="store_true",
+        help="Send even if not due yet (for testing).",
     )
     nudge_cmd.set_defaults(func=cmd_nudge)
 

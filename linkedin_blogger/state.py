@@ -36,6 +36,19 @@ def set_last_posted_at(when: datetime) -> None:
     save(state)
 
 
+def get_last_nudged_at() -> datetime | None:
+    raw = load().get("last_nudged_at")
+    return datetime.fromisoformat(raw) if raw else None
+
+
+def set_last_nudged_at(when: datetime) -> None:
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    state = load()
+    state["last_nudged_at"] = when.astimezone(timezone.utc).isoformat(timespec="seconds")
+    save(state)
+
+
 def get_processing() -> dict:
     return load().get("processing", {})
 

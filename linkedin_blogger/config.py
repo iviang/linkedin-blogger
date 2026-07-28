@@ -64,6 +64,10 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 NUDGE_FROM = os.getenv("NUDGE_FROM")
 NUDGE_TO = os.getenv("NUDGE_TO")
 
+# Days after your last post (or last nudge) before the next nudge is due. Run the nudge
+# job daily; it only emails when this much time has passed, resetting from each post.
+NUDGE_INTERVAL_DAYS = int(os.getenv("NUDGE_INTERVAL_DAYS", "7"))
+
 
 def require(name: str, value):
     """Fail loudly and early when a required setting is missing, rather than

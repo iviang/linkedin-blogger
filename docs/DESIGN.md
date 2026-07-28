@@ -95,8 +95,10 @@ Data files (`.env`, `tokens.json`, `state.json`, `activity_log.md`, `agent_notes
 
 - End-to-end runtime test of the full flow: ingest -> brainstorm -> select -> skeleton ->
   check -> approve -> publish, on a machine with dependencies installed.
-- Wire the weekly schedule (Task Scheduler): `nudge --prepare` weekly, plus a recurring
-  `publish` so due queued posts go out.
+- Wire the schedule (Task Scheduler): run `nudge --prepare` and `publish` daily. The nudge
+  self-gates on NUDGE_INTERVAL_DAYS since your last post (default 7), so a daily run only
+  emails when a post is actually due; `publish` only posts drafts whose scheduled time is
+  due.
 - Optional: video media.
 
 ## Prerequisites and secrets (in `.env`)
