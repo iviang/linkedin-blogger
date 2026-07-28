@@ -19,7 +19,10 @@ DRAFTS_DIR = BASE_DIR / "drafts"
 LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID")
 LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET")
 LINKEDIN_REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI", "http://localhost:8000/callback")
-LINKEDIN_API_VERSION = os.getenv("LINKEDIN_API_VERSION", "202506")
+# LinkedIn keeps each monthly API version active for about a year, so this
+# default goes stale. If the API returns 426 NONEXISTENT_VERSION, bump it (or
+# LINKEDIN_API_VERSION in .env) to a recent YYYYMM from the LinkedIn changelog.
+LINKEDIN_API_VERSION = os.getenv("LINKEDIN_API_VERSION", "202607")
 
 # Scopes: openid + profile let us read the member id via /v2/userinfo;
 # w_member_social is the permission that actually allows posting as the member.
