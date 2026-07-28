@@ -81,7 +81,9 @@ def _ask(system: str, user: str, max_tokens: int = 2048) -> str:
         system=system,
         messages=[{"role": "user", "content": user}],
     )
-    return message.content[0].text.strip()
+    # Sonnet 5 uses adaptive thinking, so content[0] can be a ThinkingBlock. Take the
+    # first text block instead of assuming position 0.
+    return next((b.text for b in message.content if b.type == "text"), "").strip()
 
 
 def _parse_json(text: str):

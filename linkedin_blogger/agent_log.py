@@ -113,7 +113,9 @@ def synthesize_agent_log(since: datetime | None) -> str:
         system=_SYNTHESIS_SYSTEM,
         messages=[{"role": "user", "content": "\n".join(user_parts)}],
     )
-    return message.content[0].text.strip()
+    # Sonnet 5 uses adaptive thinking, so content[0] can be a ThinkingBlock. Take the
+    # first text block instead of assuming position 0.
+    return next((b.text for b in message.content if b.type == "text"), "").strip()
 
 
 def build_reference(since: datetime | None, agent_log_text: str) -> str:

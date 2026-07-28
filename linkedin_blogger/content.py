@@ -76,4 +76,6 @@ def draft_post(activity: str) -> str:
         ],
     )
     # A single text block is expected for this prompt.
-    return message.content[0].text.strip()
+    # Sonnet 5 uses adaptive thinking, so content[0] can be a ThinkingBlock. Take the
+    # first text block instead of assuming position 0.
+    return next((b.text for b in message.content if b.type == "text"), "").strip()
