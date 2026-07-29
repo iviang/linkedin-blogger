@@ -156,6 +156,14 @@
   .ebody { padding: 18px 20px; }
   .pbody { padding: 14px 16px; }
 
+  .term-head { cursor: pointer; }
+  .term-head h2 { display: flex; align-items: center; gap: 8px; }
+  #terminalPanel.collapsed .term-body { display: none; }
+  .term { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; color: #C7D0D9; background: #12161A; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .term > div { padding: 1px 0; }
+  .term-ts { color: #6F777F; margin-right: 8px; }
+  .term .empty { color: #6F777F; }
+
   /* version history */
   .vitem { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
   .vitem:last-child { border-bottom: 0; }
@@ -386,6 +394,15 @@
           <section class="panel" id="previewPanel">
             <div class="phead"><h2>Preview</h2><button class="btn" id="ePreviewBtn">Show preview</button></div>
             <div class="pbody"><p class="empty" style="margin: 0;">Opens the post at LinkedIn's width, with your name and photo.</p></div>
+          </section>
+          <section class="panel" id="terminalPanel">
+            <div class="phead term-head" id="termHead">
+              <h2>Terminal <span class="caret" id="termCaret">&#9662;</span></h2>
+              <span class="count" id="termCount"></span>
+            </div>
+            <div class="term-body">
+              <pre class="term" id="termOut"><div class="empty">Pipeline activity shows here.</div></pre>
+            </div>
           </section>
         </div>
       </div>
@@ -1397,11 +1414,48 @@
       });
     });
 
+    // Terminal: poll the activity feed and append new lines, keeping the view pinned to the
+    // bottom unless the user has scrolled up.
+    var termLastSeq = 0;
+    async function pollActivity() {
+      try {
+        var r = await getJSON("/api/activity?after=" + termLastSeq);
+        if (r.last != null && r.last < termLastSeq) { // server restarted: start over
+          termLastSeq = 0;
+          document.getElementById("termOut").innerHTML = "";
+          r = await getJSON("/api/activity?after=0");
+        }
+        var out = document.getElementById("termOut");
+        if (r.entries && r.entries.length) {
+          var ph = out.querySelector(".empty"); if (ph) ph.remove();
+          var atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 8;
+          r.entries.forEach(function (e) {
+            var line = document.createElement("div");
+            line.innerHTML = '<span class="term-ts">' + esc(e.ts) + "</span>" + esc(e.text);
+            out.appendChild(line);
+          });
+          termLastSeq = r.last;
+          while (out.children.length > 300) out.removeChild(out.firstChild);
+          if (atBottom) out.scrollTop = out.scrollHeight;
+          document.getElementById("termCount").textContent = termLastSeq + " events";
+        } else if (r.last != null) {
+          termLastSeq = Math.max(termLastSeq, r.last);
+        }
+      } catch (e) { /* server unreachable; ignore */ }
+    }
+    document.getElementById("termHead").addEventListener("click", function () {
+      var p = document.getElementById("terminalPanel");
+      p.classList.toggle("collapsed");
+      document.getElementById("termCaret").innerHTML = p.classList.contains("collapsed") ? "&#9656;" : "&#9662;";
+    });
+
     resetEditor();
     load();
     loadIdeas();
     loadSettings();
     loadProfile();
+    pollActivity();
+    setInterval(pollActivity, 2000);
   </script>
 </body>
 </html>

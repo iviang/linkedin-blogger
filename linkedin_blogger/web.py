@@ -29,6 +29,18 @@ DONE_STATUSES = {"posted", "posting"}
 # a local tool restarted often, and it avoids a LinkedIn call on every preview.
 _PROFILE_CACHE: dict = {}
 
+# In-memory activity feed for the terminal panel. Endpoints append short lines here; the UI
+# polls for new ones. Kept small and per-run (not persisted) since it is just a live view.
+_ACTIVITY: list = []
+_ACTIVITY_SEQ = [0]
+
+
+def _log(text: str) -> None:
+    _ACTIVITY_SEQ[0] += 1
+    _ACTIVITY.append({"seq": _ACTIVITY_SEQ[0], "ts": datetime.now().strftime("%H:%M:%S"), "text": text})
+    if len(_ACTIVITY) > 200:
+        del _ACTIVITY[: len(_ACTIVITY) - 200]
+
 
 def guarded(view):
     """Turn a pipeline SystemExit (missing setting, bad JSON, API overload) into a clean
@@ -101,6 +113,11 @@ def create_app() -> Flask:
         queued = [d for d in drafts.list_drafts() if d["status"] in QUEUE_STATUSES]
         return {"queue": queued}
 
+    @app.get("/api/activity")
+    def api_activity():
+        after = request.args.get("after", default=0, type=int)
+        return {"entries": [e for e in _ACTIVITY if e["seq"] > after], "last": _ACTIVITY_SEQ[0]}
+
     @app.get("/api/profile")
     def api_profile():
         """Your LinkedIn name and picture for the preview. Falls back to nulls if not logged in."""
@@ -126,7 +143,9 @@ def create_app() -> Flask:
     @guarded
     def api_ingest():
         """Rebuild reference.md from GitHub activity and notes since the last post."""
+        _log("ingest: gathering activity and synthesizing the reference with Claude")
         since, _agent_log, reference = agent_log.run_ingest()
+        _log(f"ingest: reference rebuilt ({len(reference)} chars)")
         return {
             "ok": True,
             "since": since.isoformat() if since else None,
@@ -141,8 +160,10 @@ def create_app() -> Flask:
         count = int(data.get("count") or config.BRAINSTORM_IDEA_COUNT)
         reference = processing.load_reference()
         avoid = state.get_processing().get("ideas") if data.get("reshuffle") else None
+        _log("brainstorm: asking Claude for " + str(count) + " post ideas")
         ideas = processing.brainstorm_ideas(reference, count, avoid=avoid or None)
         state.save_processing({"ideas": ideas, "selected_index": None, "comments": ""})
+        _log(f"brainstorm: got {len(ideas)} ideas")
         return {"ideas": ideas, "selected_index": None}
 
     @app.get("/api/ideas")
@@ -180,6 +201,7 @@ def create_app() -> Flask:
             return {"error": "Select an idea before creating a skeleton."}, 400
         idea = ideas[selected]
         reference = processing.load_reference()
+        _log("skeleton: writing a draft for \"" + idea.get("title", "") + "\" with Claude")
         body = processing.write_skeleton(reference, idea, session.get("comments", ""))
 
         draft_id = drafts.new_draft_id()
@@ -195,6 +217,7 @@ def create_app() -> Flask:
             drafts.draft_path(draft_id),
         )
         versions.record(draft_id, "created", "Skeleton created", idea.get("title", ""), body, "auto")
+        _log(f"skeleton: draft {draft_id} created")
         return {"id": draft_id, "body": body}
 
     # --- Stage 3b: edit a draft, run its check, override flags ---
@@ -250,6 +273,7 @@ def create_app() -> Flask:
         body = data.get("body") or ""
         drafts.write_draft(meta, body, drafts.draft_path(draft_id))
         versions.record(draft_id, "created", "Draft created", meta["idea_title"], body, "you")
+        _log(f"new: freestyle draft {draft_id} created")
         return _draft_detail(draft_id)
 
     @app.get("/api/drafts/<draft_id>")
@@ -288,12 +312,14 @@ def create_app() -> Flask:
         if meta.get("status") in ("posted", "posting"):
             return {"error": "That draft is already posted."}, 400
         reference = processing.load_reference()
+        _log(f"check: reviewing draft {draft_id} against the reference with Claude")
         result = processing.run_check(reference, body)
         processing.save_check(draft_id, result)
         if result["passed"] and meta.get("status") == "skeleton":
             meta["status"] = "pending"
             drafts.write_draft(meta, body, path)
         open_flags = len([f for f in result.get("flags", []) if not f.get("overridden")])
+        _log(f"check: {'passed' if result['passed'] else str(open_flags) + ' open flag(s)'}")
         label = "Error check passed" if result["passed"] else f"Error check: {open_flags} open flag(s)"
         versions.record(draft_id, "check", label, meta.get("idea_title", ""), body, "auto")
         return _draft_detail(draft_id)
@@ -312,6 +338,7 @@ def create_app() -> Flask:
             meta["status"] = "pending"
             drafts.write_draft(meta, body, path)
         versions.record(draft_id, "override", f"Overrode {flag_id}", meta.get("idea_title", ""), body, "you")
+        _log(f"override: {flag_id} on {draft_id}")
         return _draft_detail(draft_id)
 
     @app.post("/api/drafts/<draft_id>/accept")
@@ -332,6 +359,7 @@ def create_app() -> Flask:
             meta["status"] = "pending"
         drafts.write_draft(meta, new_body, path)
         versions.record(draft_id, "edit", f"Accepted fix for {flag_id}", meta.get("idea_title", ""), new_body, "you")
+        _log(f"accept: applied suggested fix for {flag_id} on {draft_id}")
         return _draft_detail(draft_id)
 
     @app.get("/api/drafts/<draft_id>/versions")
@@ -378,6 +406,7 @@ def create_app() -> Flask:
         if meta.get("status") in ("posted", "posting"):
             return {"error": "A posted draft is the record of that post and cannot be deleted here."}, 400
         drafts.delete_draft(draft_id)
+        _log(f"delete: {draft_id} moved to trash")
         return {"ok": True}
 
     @app.post("/api/drafts/<draft_id>/schedule")
@@ -417,6 +446,7 @@ def create_app() -> Flask:
         scheduled = queue.parse_scheduled_at(when) if when else _default_schedule(draft_id)
         meta.update(queue.queue_meta(scheduled))
         drafts.write_draft(meta, body, path)
+        _log(f"queue: {draft_id} scheduled for {scheduled.astimezone().strftime('%Y-%m-%d %H:%M')}")
         return _draft_detail(draft_id)
 
     def _default_schedule(exclude_id: str) -> datetime:
@@ -479,6 +509,7 @@ def create_app() -> Flask:
             media_list.append({"path": dest.relative_to(config.BASE_DIR).as_posix(), "alt": ""})
         drafts.set_media(meta, media_list)
         drafts.write_draft(meta, body, path)
+        _log(f"media: added {len(uploads)} file(s) to {draft_id}")
         return _draft_detail(draft_id)
 
     @app.delete("/api/drafts/<draft_id>/media/<int:index>")
@@ -537,6 +568,7 @@ def create_app() -> Flask:
         media_type = IMAGE_MEDIA_TYPES.get(abspath.suffix.lower())
         if not media_type:
             return {"error": "Alt text descriptions are for photos, not videos."}, 400
+        _log(f"describe: generating alt text for a photo on {draft_id} with Claude vision")
         alt = llm.describe_image(abspath.read_bytes(), media_type)
         media_list[index]["alt"] = alt
         drafts.set_media(meta, media_list)
@@ -568,11 +600,15 @@ def create_app() -> Flask:
         def write_draft(updated_meta, updated_body):
             drafts.write_draft(updated_meta, updated_body, path)
 
+        _log(f"publish: posting {draft_id} to LinkedIn")
         ok = queue.publish_draft(meta, body, write_draft)
         if ok:
+            _log(f"publish: {draft_id} posted")
             return True, None
         after, _ = drafts.read_draft(path)
-        return False, after.get("publish_error", "Publish failed.")
+        error = after.get("publish_error", "Publish failed.")
+        _log(f"publish: {draft_id} failed ({error})")
+        return False, error
 
     @app.post("/api/drafts/<draft_id>/publish")
     @guarded
@@ -621,6 +657,7 @@ def create_app() -> Flask:
 def run(host: str = "127.0.0.1", port: int = 5000, open_browser: bool = True) -> None:
     """Start the local server. Binds to 127.0.0.1 so nothing is exposed to the network."""
     app = create_app()
+    _log("server: LinkedIn Blogger started, ready")
     url = f"http://{host}:{port}"
     print(f"LinkedIn Blogger running at {url}")
     print("Local only: nothing is exposed to the internet. Stop with Ctrl+C.")
