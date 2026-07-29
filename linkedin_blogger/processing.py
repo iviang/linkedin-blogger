@@ -205,12 +205,30 @@ def run_check(reference: str, draft_body: str) -> dict:
         raise SystemExit("Error check returned an unexpected format. Try again.")
 
     flags = list(result.get("flags") or [])
+
+    # Word count is checked here, not left to the model: if the draft is over the limit, add
+    # a length flag deterministically (replacing any the model guessed) so it is always shown.
+    words = len(draft_body.split())
+    if words > config.MAX_POST_WORDS:
+        flags = [f for f in flags if f.get("category") != "length"]
+        flags.append(
+            {
+                "id": "length-long",
+                "category": "length",
+                "message": (
+                    f"Post is {words} words, over the {config.MAX_POST_WORDS}-word limit. "
+                    "Trim it to queue or publish."
+                ),
+                "overridden": False,
+            }
+        )
+
     seen_ids = {f.get("id") for f in flags}
     for gap in gap_flags:
         if gap["id"] not in seen_ids:
             flags.append(gap)
 
-    passed = bool(result.get("passed")) and not gap_flags
+    passed = not any(not f.get("overridden") for f in flags)
     return {"passed": passed, "flags": flags, "body_sha": _body_sha(draft_body)}
 
 
