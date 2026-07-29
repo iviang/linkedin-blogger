@@ -28,27 +28,29 @@ def build_message(prepared: bool) -> EmailMessage:
     if prepared:
         intro = (
             "It has been a while since your last post. Your reference material was just "
-            "refreshed from your logs and GitHub activity, so you can skip step 1 and start at "
-            "brainstorm."
+            "refreshed from your logs and GitHub activity, so you can skip ingest and go "
+            "straight to brainstorming."
         )
     else:
         intro = "It has been a while since your last post. Time to write the next one."
 
     body = f"""{intro}
 
-Run these from the linkedin-blogger folder, using your virtualenv's python (ID and N are
-placeholders you replace, no angle brackets):
+Open the LinkedIn Blogger app:
 
-  1. python blogger.py ingest        gather notes and GitHub activity since your last post
-  2. python blogger.py brainstorm    get a few post ideas
-  3. python blogger.py select N      pick one (add --comment "direction"), or reshuffle
-  4. python blogger.py skeleton      draft with fill-in gaps
-  5. fill every [YOUR VOICE: ...] gap in the draft file, then:
-  6. python blogger.py check ID      check grammar, length, and factual claims
-  7. python blogger.py attach ID path/to/image.png    optional photo
-  8. python blogger.py approve ID --at 2026-01-01T09:00:00-08:00    queue it for a time
+  1. From the linkedin-blogger folder, run:  python blogger.py serve
+  2. Open http://localhost:5000 in your browser.
 
-Scheduled posts publish automatically when due. Nothing publishes without your approval.
+Then, in the app:
+
+  - Run ingest to gather your notes and GitHub activity since your last post (skip it if the
+    reference is already fresh).
+  - Brainstorm ideas and pick one, or reshuffle for new ones.
+  - Create the skeleton draft, then fill every [YOUR VOICE: ...] gap in your own words.
+  - Run the error check, accept or override its suggestions, and add a photo if you like.
+  - Queue it for a time, or publish it now.
+
+Scheduled posts publish when due. Nothing publishes without your approval.
 """
     msg.set_content(body)
     return msg
