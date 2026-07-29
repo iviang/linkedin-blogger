@@ -230,7 +230,7 @@
   .mwarn { color: var(--warn-ink); background: var(--warn-bg); border-radius: 9px; padding: 9px 12px; font-size: 12.5px; margin-top: 10px; }
   .alt { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); }
 
-  .pv { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .pv { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
   .pv-head { display: flex; gap: 11px; align-items: center; padding: 13px 15px; }
   .pv-av { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); color: #F5F3EC; display: grid; place-items: center; font-weight: 700; font-size: 15px; flex: none; overflow: hidden; }
   .pv-av img { width: 100%; height: 100%; object-fit: cover; }
@@ -346,17 +346,7 @@
 
             <div class="eactions">
               <button class="btn primary" id="eSave">Save</button>
-              <button class="btn" id="ePreviewBtn">Show preview</button>
               <button class="btn danger" id="eDelete" style="margin-left: auto;">Delete draft</button>
-            </div>
-            <div class="pv" id="ePreview" hidden>
-              <div class="pv-head">
-                <div class="pv-av" id="pvAv">VN</div>
-                <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
-              </div>
-              <div class="pv-text" id="pvText"></div>
-              <div class="pv-imgs" id="pvImgs"></div>
-              <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
             </div>
           </div>
         </section>
@@ -391,6 +381,21 @@
               </div>
               <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
               <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
+            </div>
+          </section>
+          <section class="panel" id="previewPanel">
+            <div class="phead"><h2>Preview</h2><button class="btn" id="ePreviewBtn">Show preview</button></div>
+            <div class="pbody">
+              <div class="pv" id="ePreview" hidden>
+                <div class="pv-head">
+                  <div class="pv-av" id="pvAv">VN</div>
+                  <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+                </div>
+                <div class="pv-text" id="pvText"></div>
+                <div class="pv-imgs" id="pvImgs"></div>
+                <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
+              </div>
+              <p class="empty" id="previewHint" style="margin: 0;">Shows the post as it will appear on LinkedIn.</p>
             </div>
           </section>
         </div>
@@ -895,6 +900,7 @@
       ePubNote(detail.status === "posted" ? "Already posted." : "");
 
       document.getElementById("ePreview").hidden = true;
+      document.getElementById("previewHint").hidden = false;
       document.getElementById("ePreviewBtn").textContent = "Show preview";
 
       applyGate();
@@ -1231,8 +1237,8 @@
     }
     document.getElementById("ePreviewBtn").addEventListener("click", function () {
       var pv = document.getElementById("ePreview");
-      if (pv.hidden) { renderPreview(); pv.hidden = false; this.textContent = "Hide preview"; }
-      else { pv.hidden = true; this.textContent = "Show preview"; }
+      if (pv.hidden) { renderPreview(); pv.hidden = false; document.getElementById("previewHint").hidden = true; this.textContent = "Hide preview"; }
+      else { pv.hidden = true; document.getElementById("previewHint").hidden = false; this.textContent = "Show preview"; }
     });
     document.getElementById("ePost").addEventListener("input", function () {
       if (!document.getElementById("ePreview").hidden) renderPreview();
