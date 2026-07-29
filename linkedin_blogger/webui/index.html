@@ -181,6 +181,9 @@
   .flags { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
   .flag { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: var(--surface); }
   .flag.ovr { border-left-color: var(--ok); opacity: .85; }
+  .flag.has-ex { cursor: pointer; }
+  .flag.has-ex:hover { border-color: var(--navy); border-left-color: var(--navy); }
+  .flag-hint { font-size: 11px; color: var(--navy); margin-top: 6px; }
   .flag-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
   .flag-cat { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn-ink); }
   .flag-msg { font-size: 13px; margin-top: 6px; line-height: 1.45; }
@@ -625,16 +628,45 @@
       if (!check || !check.flags || !check.flags.length) { flags.innerHTML = ""; return; }
       flags.innerHTML = check.flags.map(function (f) {
         var ovr = f.overridden;
-        return '<div class="flag' + (ovr ? " ovr" : "") + '"><div class="flag-top"><span class="flag-cat">' +
-          esc(f.category || "") + "</span>" +
+        var hasEx = !!f.excerpt;
+        return '<div class="flag' + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
+          (hasEx ? ' data-excerpt="' + esc(f.excerpt) + '" title="Click to find this in the draft"' : "") +
+          '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" +
           (ovr ? '<span class="note ok">overridden</span>'
                : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>') +
           '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
-          (f.excerpt ? '<div class="flag-ex">' + esc(f.excerpt) + "</div>" : "") + "</div>";
+          (hasEx ? '<div class="flag-ex">' + esc(f.excerpt) + "</div><div class=\"flag-hint\">Click to highlight in the draft</div>" : "") +
+          "</div>";
       }).join("");
       Array.prototype.forEach.call(flags.querySelectorAll("button[data-flag]"), function (btn) {
-        btn.addEventListener("click", function () { overrideFlag(this.getAttribute("data-flag")); });
+        btn.addEventListener("click", function (e) { e.stopPropagation(); overrideFlag(this.getAttribute("data-flag")); });
       });
+      Array.prototype.forEach.call(flags.querySelectorAll(".flag.has-ex"), function (fl) {
+        fl.addEventListener("click", function () { highlightExcerpt(this.getAttribute("data-excerpt")); });
+      });
+    }
+
+    // Select the flagged excerpt in the editor body and scroll it into view. The body is a
+    // textarea, so we use the native text selection as the highlight.
+    function highlightExcerpt(excerpt) {
+      if (!excerpt) return;
+      var ta = document.getElementById("ePost");
+      var text = ta.value;
+      var idx = text.indexOf(excerpt);
+      if (idx === -1) {
+        // The excerpt may be truncated ("...") or slightly changed since the check; try a prefix.
+        var probe = excerpt.replace(/\s*\.\.\.\s*$/, "").slice(0, 40);
+        idx = probe ? text.indexOf(probe) : -1;
+        if (idx === -1) { eNote("That excerpt is not in the current text (it changed since the check).", "warn"); return; }
+        excerpt = probe;
+      }
+      // Scroll the excerpt roughly to the middle: measure the height of the text before it.
+      ta.value = text.substring(0, idx);
+      var before = ta.scrollHeight;
+      ta.value = text;
+      ta.scrollTop = Math.max(0, before - ta.clientHeight / 2);
+      ta.focus();
+      ta.setSelectionRange(idx, idx + excerpt.length);
     }
 
     // Blank freestyle state: editor open, no draft yet.
