@@ -162,7 +162,10 @@
   .cmp-col { padding: 14px 18px; }
   .cmp-col + .cmp-col { border-left: 1px solid var(--line); }
   .cmp-h { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
-  .cmp-text { font: inherit; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+  .cmp-text { font: inherit; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+  .del { background: #FBE4E1; color: #8A2B21; text-decoration: line-through; border-radius: 4px; padding: 0 2px; }
+  .ins { background: var(--ok-bg); color: var(--ok-ink); border-radius: 4px; padding: 0 2px; }
+  @media (prefers-color-scheme: dark) { .del { background: #3A1C18; color: #F0B3AA; } }
   .cmp-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--raise); }
   @media (max-width: 720px) { .cmp-cols { grid-template-columns: 1fr; } .cmp-col + .cmp-col { border-left: 0; border-top: 1px solid var(--line); } }
 
@@ -1084,14 +1087,53 @@
       } catch (e) { box.innerHTML = '<p class="empty">Could not load history.</p>'; }
     }
 
+    // Word-level diff via LCS. Deletions (only in the old text) and insertions (only in the
+    // new text) are marked so each column highlights what changed.
+    function diffTokens(a, b) {
+      var n = a.length, m = b.length;
+      if (n > 2000 || m > 2000) return null; // fall back to plain for very long texts
+      var dp = [];
+      for (var i = 0; i <= n; i++) dp.push(new Array(m + 1).fill(0));
+      for (var i = n - 1; i >= 0; i--) {
+        for (var j = m - 1; j >= 0; j--) {
+          dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
+      }
+      var ops = [], i = 0, j = 0;
+      while (i < n && j < m) {
+        if (a[i] === b[j]) { ops.push({ t: "eq", v: a[i] }); i++; j++; }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ t: "del", v: a[i] }); i++; }
+        else { ops.push({ t: "ins", v: b[j] }); j++; }
+      }
+      while (i < n) { ops.push({ t: "del", v: a[i] }); i++; }
+      while (j < m) { ops.push({ t: "ins", v: b[j] }); j++; }
+      return ops;
+    }
+    function renderDiff(oldText, newText) {
+      var a = oldText.split(/(\s+)/), b = newText.split(/(\s+)/);
+      var ops = diffTokens(a, b);
+      if (!ops) return { oldHtml: esc(oldText), newHtml: esc(newText) };
+      var oldHtml = "", newHtml = "";
+      ops.forEach(function (op) {
+        var safe = esc(op.v);
+        if (op.t === "eq") { oldHtml += safe; newHtml += safe; }
+        else if (op.t === "del") { oldHtml += '<span class="del">' + safe + "</span>"; }
+        else { newHtml += '<span class="ins">' + safe + "</span>"; }
+      });
+      return { oldHtml: oldHtml, newHtml: newHtml };
+    }
+
     async function openCompare(id, index) {
       try {
         var v = await getJSON("/api/drafts/" + encodeURIComponent(id) + "/versions/" + index);
         if (v.error) throw new Error(v.error);
         document.getElementById("cmpSub").textContent = v.label + " · " + new Date(v.at).toLocaleString();
-        document.getElementById("cmpOld").textContent = (v.title ? v.title + "\n\n" : "") + v.body;
+        var oldFull = (v.title ? v.title + "\n\n" : "") + v.body;
         var curTitle = document.getElementById("eTitle").value;
-        document.getElementById("cmpNew").textContent = (curTitle ? curTitle + "\n\n" : "") + document.getElementById("ePost").value;
+        var newFull = (curTitle ? curTitle + "\n\n" : "") + document.getElementById("ePost").value;
+        var d = renderDiff(oldFull, newFull);
+        document.getElementById("cmpOld").innerHTML = d.oldHtml;
+        document.getElementById("cmpNew").innerHTML = d.newHtml;
         document.getElementById("cmpRestore").onclick = function () { restoreVersion(id, index); };
         document.getElementById("cmpOverlay").hidden = false;
       } catch (e) { eNote(e.message, "warn"); }
