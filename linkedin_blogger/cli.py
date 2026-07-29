@@ -535,7 +535,8 @@ def main(argv=None):
 
     nudge_cmd = sub.add_parser(
         "nudge",
-        help="Email a reminder if a post is due (a week after your last post). Run daily.",
+        help="Email a reminder if a post is due (your post-interval setting since the last "
+        "post or nudge). Safe to run on a schedule.",
     )
     nudge_cmd.add_argument(
         "--prepare",
@@ -545,7 +546,7 @@ def main(argv=None):
     nudge_cmd.add_argument(
         "--force",
         action="store_true",
-        help="Send even if not due yet (for testing).",
+        help="Send it now, regardless of whether it is due.",
     )
     nudge_cmd.set_defaults(func=cmd_nudge)
 

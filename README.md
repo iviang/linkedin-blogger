@@ -144,6 +144,21 @@ and `nudge` round out the commands. The legacy `draft` still does a one-shot dra
 draft over the word limit (default 220) cannot be approved or published from either
 front-end until trimmed.
 
+### Reminders (nudge)
+
+The nudge is the "come write your post" email to yourself.
+
+```bash
+python blogger.py nudge            # email the reminder only if it is due
+python blogger.py nudge --force    # send it now, regardless of whether it is due
+python blogger.py nudge --prepare  # run ingest first so the reference is fresh
+```
+
+Without `--force`, `nudge` only emails once your posting interval (the "post every N days"
+setting) has passed since your last post or nudge, so it is safe to run on a schedule and
+stays quiet otherwise. Flags combine, for example `nudge --force --prepare`. The email opens
+with the date of your last post (or says you have not posted yet) and points to the web app.
+
 ## Notes and limits
 
 - **Scheduled posting.** A queued post goes live when something runs `publish` after its
