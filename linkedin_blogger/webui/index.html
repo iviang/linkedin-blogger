@@ -16,6 +16,8 @@
             --line:#2A313A; --line2:#343C45; --navy:#8FB8DC; --navy-soft:#1E2B39;
             --ok:#46C79C; --ok-bg:#123528; --ok-ink:#7FE0BF; --warn:#E0A45E; --warn-bg:#3A2A17; --warn-ink:#F0C48D; }
   }
+  :root { --cat-fact: #C0392B; --cat-grammar: #2D6CB6; --cat-format: #B4720F; --cat-length: #6B5FA8; }
+  @media (prefers-color-scheme: dark) { :root { --cat-fact: #E8897F; --cat-grammar: #7FB2E8; --cat-format: #E0A45E; --cat-length: #B3A6E0; } }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; color-scheme: light dark; }
@@ -51,6 +53,10 @@
   .chip.ok { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
   .chip.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: transparent; }
 
+  .side-meta { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; display: grid; gap: 10px; }
+  .metrow { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; }
+  .mk { color: var(--muted); }
+  .mv { font-family: var(--mono); font-size: 12px; color: var(--ink); }
   .side-sec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; }
   .side-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
   .qlist { display: flex; flex-direction: column; gap: 2px; }
@@ -131,7 +137,17 @@
   /* editor + work sidebar (error check, version history) */
   .workrow { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
   @media (max-width: 1080px) { .workrow { grid-template-columns: 1fr; } }
+  .workmain { min-width: 0; }
   .worksidebar { min-width: 0; }
+
+  .composebar { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+  .wordcount { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .wordcount.under { color: var(--warn-ink); }
+  .wordcount.over { color: var(--cat-fact); }
+  .meter { width: 130px; height: 6px; border-radius: 999px; background: var(--line2); overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .15s ease; }
+  .meter i.under { background: var(--warn); }
+  .meter i.over { background: var(--cat-fact); }
   .ebody { padding: 18px 20px; }
   .pbody { padding: 14px 16px; }
 
@@ -178,6 +194,14 @@
 
   .flags { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
   .flag { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: var(--surface); }
+  .flag.cat-factualness, .flag.cat-discrepancy { border-left-color: var(--cat-fact); }
+  .flag.cat-grammar { border-left-color: var(--cat-grammar); }
+  .flag.cat-formatting { border-left-color: var(--cat-format); }
+  .flag.cat-length { border-left-color: var(--cat-length); }
+  .flag.cat-factualness .flag-cat, .flag.cat-discrepancy .flag-cat { color: var(--cat-fact); }
+  .flag.cat-grammar .flag-cat { color: var(--cat-grammar); }
+  .flag.cat-formatting .flag-cat { color: var(--cat-format); }
+  .flag.cat-length .flag-cat { color: var(--cat-length); }
   .flag.ovr { border-left-color: var(--ok); opacity: .85; }
   .flag.has-ex { cursor: pointer; }
   .flag.has-ex:hover { border-color: var(--navy); border-left-color: var(--navy); }
@@ -236,6 +260,11 @@
 
       <div class="chips" id="chips"><span class="chip">loading&hellip;</span></div>
 
+      <div class="side-meta">
+        <div class="metrow"><span class="mk">Reference</span><span class="mv" id="metaRef">&mdash;</span></div>
+        <div class="metrow"><span class="mk">Next nudge</span><span class="mv" id="metaNudge">&mdash;</span></div>
+      </div>
+
       <div class="side-sec">
         <div class="side-h"><span class="eyebrow">In queue</span><span class="count" id="queueCount"></span></div>
         <div class="qlist" id="queue"><p class="empty">Loading&hellip;</p></div>
@@ -280,6 +309,7 @@
       </section>
 
       <div class="workrow">
+        <div class="workmain">
         <section class="panel" id="editorPanel">
           <div class="phead">
             <h2>Editor</h2>
@@ -294,7 +324,12 @@
             <input class="etitle" id="eTitle" type="text" placeholder="Give the post a title">
             <label class="elabel" for="ePost">Post body</label>
             <textarea class="epost" id="ePost" spellcheck="true" placeholder="Start writing. Your post saves automatically as a draft."></textarea>
-            <div class="spellrow"><span class="spellpill">Spell check on</span></div>
+            <div class="composebar">
+              <span class="wordcount" id="wordCount">0 / 220 words</span>
+              <span class="meter"><i id="wordMeter"></i></span>
+              <span style="flex: 1;"></span>
+              <span class="spellpill">Spell check on</span>
+            </div>
 
             <div class="media">
               <label class="elabel">Photos or video (optional)</label>
@@ -307,6 +342,7 @@
             <div class="eactions">
               <button class="btn primary" id="eSave">Save</button>
               <button class="btn" id="ePreviewBtn">Show preview</button>
+              <button class="btn danger" id="eDelete" style="margin-left: auto;">Delete draft</button>
             </div>
             <div class="pv" id="ePreview" hidden>
               <div class="pv-head">
@@ -319,6 +355,12 @@
             </div>
           </div>
         </section>
+
+        <section class="panel" id="draftsPanel">
+          <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
+          <div class="list" id="drafts"><p class="empty">Loading&hellip;</p></div>
+        </section>
+        </div>
 
         <div class="worksidebar">
           <section class="panel" id="checkPanel">
@@ -343,16 +385,10 @@
               </div>
               <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
               <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
-              <div class="eactions"><button class="btn danger" id="eDelete">Delete draft</button></div>
             </div>
           </section>
         </div>
       </div>
-
-      <section class="panel" id="draftsPanel">
-        <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
-        <div class="list" id="drafts"><p class="empty">Loading&hellip;</p></div>
-      </section>
     </div>
   </div>
 
@@ -428,6 +464,10 @@
           '<span class="chip">' + last + "</span>";
         document.getElementById("draftCount").textContent = s.draft_count + " total";
         document.getElementById("queueCount").textContent = s.queued_count + " scheduled";
+        document.getElementById("metaRef").textContent = s.reference_generated ? relDate(s.reference_generated) : "none yet";
+        document.getElementById("metaNudge").textContent = s.next_nudge_days == null
+          ? "after first post"
+          : (s.next_nudge_days === 0 ? "due now" : "in ~" + s.next_nudge_days + (s.next_nudge_days === 1 ? " day" : " days"));
 
         var d = await getJSON("/api/drafts");
         renderList("drafts", d.drafts, "No drafts yet. Brainstorm above, or just write in the editor.");
@@ -638,7 +678,8 @@
           ? '<div class="flag-sug"><div class="flag-sug-h">Suggested fix</div><div class="flag-sug-t">' +
             esc(f.suggestion) + '</div><button class="btn primary" data-accept="' + esc(f.id) + '">Accept fix</button></div>'
           : "";
-        return '<div class="flag' + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
+        var catClass = f.category ? " cat-" + esc(f.category) : "";
+        return '<div class="flag' + catClass + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
           (hasEx ? ' data-excerpt="' + esc(f.excerpt) + '" title="Click to find this in the draft"' : "") +
           '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" + status +
           '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
@@ -654,6 +695,25 @@
       Array.prototype.forEach.call(flags.querySelectorAll(".flag.has-ex"), function (fl) {
         fl.addEventListener("click", function () { highlightExcerpt(this.getAttribute("data-excerpt")); });
       });
+    }
+
+    // Word count against LinkedIn's 120-220 target: the meter fills toward 220, and it turns
+    // amber under 120 (too short) or red over 220 (too long).
+    function updateWordCount() {
+      var text = document.getElementById("ePost").value.trim();
+      var n = text ? text.split(/\s+/).length : 0;
+      var wc = document.getElementById("wordCount");
+      wc.textContent = n + " / 220 words";
+      var state = n > 220 ? "over" : (n > 0 && n < 120 ? "under" : "");
+      wc.className = "wordcount" + (state ? " " + state : "");
+      var meter = document.getElementById("wordMeter");
+      meter.style.width = Math.min(100, Math.round(n / 220 * 100)) + "%";
+      meter.className = state;
+    }
+
+    function relDate(iso) {
+      var d = new Date(iso), now = new Date();
+      return d.toDateString() === now.toDateString() ? "today" : d.toLocaleDateString();
     }
 
     // Grow the body textarea to fit its content so it never scrolls internally; the page
@@ -715,6 +775,7 @@
       document.getElementById("eTitle").value = ""; document.getElementById("eTitle").disabled = false;
       document.getElementById("ePost").value = ""; document.getElementById("ePost").readOnly = false;
       autoGrow(document.getElementById("ePost"));
+      updateWordCount();
       document.getElementById("eSave").disabled = false;
       document.getElementById("eCheck").disabled = false;
       document.getElementById("eFlags").innerHTML = "";
@@ -750,6 +811,7 @@
       document.getElementById("eTitle").value = detail.title || "";
       document.getElementById("ePost").value = detail.body || "";
       autoGrow(document.getElementById("ePost"));
+      updateWordCount();
       var lock = document.getElementById("eLock");
       var ro = !detail.editable;
       if (ro) { lock.textContent = detail.lock_reason || "This draft cannot be edited."; lock.hidden = false; }
@@ -859,6 +921,7 @@
     document.getElementById("ePost").addEventListener("input", scheduleAutosave);
     document.getElementById("eTitle").addEventListener("input", scheduleAutosave);
     document.getElementById("ePost").addEventListener("input", function () { autoGrow(this); });
+    document.getElementById("ePost").addEventListener("input", updateWordCount);
     document.getElementById("ePost").addEventListener("focus", function () { setComposeCollapsed(true); });
     window.addEventListener("resize", function () { autoGrow(document.getElementById("ePost")); });
 

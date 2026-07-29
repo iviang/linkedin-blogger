@@ -6,8 +6,9 @@ select, skeleton) so the browser can drive the pipeline the CLI already implemen
 """
 
 import functools
+import math
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask, request, send_file, send_from_directory
@@ -64,9 +65,25 @@ def create_app() -> Flask:
         items = drafts.list_drafts()
         in_drafts = [d for d in items if d["status"] not in QUEUE_STATUSES | DONE_STATUSES]
         queued = [d for d in items if d["status"] in QUEUE_STATUSES]
+
+        reference_generated = None
+        if config.REFERENCE_FILE.exists():
+            mtime = config.REFERENCE_FILE.stat().st_mtime
+            reference_generated = datetime.fromtimestamp(mtime, timezone.utc).isoformat()
+
+        # Days until the next weekly nudge, measured from the most recent post or nudge.
+        next_nudge_days = None
+        anchors = [t for t in (state.get_last_posted_at(), state.get_last_nudged_at()) if t]
+        if anchors:
+            due = max(anchors) + timedelta(days=config.NUDGE_INTERVAL_DAYS)
+            days = (due - datetime.now(timezone.utc)).total_seconds() / 86400
+            next_nudge_days = max(0, int(math.ceil(days)))
+
         return {
             "last_posted_at": last.isoformat() if last else None,
             "reference_exists": config.REFERENCE_FILE.exists(),
+            "reference_generated": reference_generated,
+            "next_nudge_days": next_nudge_days,
             "repos": config.GITHUB_REPOS,
             "draft_count": len(in_drafts),
             "queued_count": len(queued),
