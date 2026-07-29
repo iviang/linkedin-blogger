@@ -344,6 +344,12 @@ def cmd_approve(args):
 
     queue.assert_editable(meta)
 
+    words = len(body.split())
+    if words > config.MAX_POST_WORDS:
+        raise SystemExit(
+            f"Draft is {words} words, over the {config.MAX_POST_WORDS}-word limit. Trim it before queuing."
+        )
+
     if args.at:
         scheduled = queue.parse_scheduled_at(args.at)
     else:

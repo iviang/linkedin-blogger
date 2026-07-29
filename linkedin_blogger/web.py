@@ -495,12 +495,15 @@ def create_app() -> Flask:
         uploads = [u for u in request.files.getlist("file") if u and u.filename]
         if not uploads:
             return {"error": "No file selected."}, 400
-        media_list = drafts.get_media(meta)
-        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        # Validate every file before saving any, so a bad one mid-batch leaves no orphans.
         for upload in uploads:
             ext = Path(upload.filename).suffix.lower()
             if ext not in media.ALLOWED_EXTS:
                 return {"error": f"Unsupported file type {ext or '(none)'}. Use JPG, PNG, GIF, or MP4."}, 400
+        media_list = drafts.get_media(meta)
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        for upload in uploads:
+            ext = Path(upload.filename).suffix.lower()
             safe = secure_filename(upload.filename) or f"image{ext}"
             # A microsecond stamp keeps names unique so a re-added file never overwrites another.
             stamp = datetime.now().strftime("%H%M%S%f")

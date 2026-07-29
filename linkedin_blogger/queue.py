@@ -93,10 +93,27 @@ def publish_draft(meta: dict, body: str, write_draft) -> bool:
     """Publish one draft. Returns True on success. Never marks posted without a URN."""
     draft_id = meta.get("id", "?")
     meta = dict(meta)
+
+    def _fail(message: str) -> bool:
+        meta["status"] = "failed"
+        meta["publish_error"] = message
+        meta["failed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        write_draft(meta, body)
+        print(f"  failed: {message}")
+        return False
+
+    # Validate before writing 'posting': a word-limit breach or a missing media file should
+    # leave the draft 'failed' (editable, retryable), never stranded mid-publish.
+    words = len(body.split())
+    if words > config.MAX_POST_WORDS:
+        return _fail(f"Over the {config.MAX_POST_WORDS}-word limit ({words} words); trim before publishing.")
+    try:
+        items = resolve_media(meta)
+    except SystemExit as exc:
+        return _fail(str(exc))
+
     meta["status"] = "posting"
     write_draft(meta, body)
-
-    items = resolve_media(meta)
 
     try:
         urn = linkedin.publish_post(body, media=items)
