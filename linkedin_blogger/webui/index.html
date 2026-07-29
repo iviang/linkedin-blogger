@@ -134,8 +134,6 @@
   .worksidebar { min-width: 0; }
   .ebody { padding: 18px 20px; }
   .pbody { padding: 14px 16px; }
-  .gate { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; }
-  .gate .eyebrow { display: block; margin-bottom: 10px; }
 
   /* version history */
   .vitem { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
@@ -316,20 +314,6 @@
               <div class="pv-imgs" id="pvImgs"></div>
               <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
             </div>
-
-            <div class="gate">
-              <span class="eyebrow">Queue for publishing</span>
-              <div class="eactions" style="margin-top: 0;">
-                <input class="etime grow" id="eWhen" type="datetime-local">
-              </div>
-              <div class="eactions">
-                <button class="btn primary" id="eSchedule">Queue</button>
-                <button class="btn" id="ePublish">Publish now</button>
-              </div>
-              <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
-              <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
-              <div class="eactions"><button class="btn danger" id="eDelete">Delete draft</button></div>
-            </div>
           </div>
         </section>
 
@@ -344,6 +328,20 @@
           <section class="panel" id="versionPanel">
             <div class="phead"><h2>Version history</h2></div>
             <div class="pbody" id="versions"><p class="empty">Save the draft to start its history.</p></div>
+          </section>
+          <section class="panel" id="queuePubPanel">
+            <div class="phead"><h2>Queue for publishing</h2></div>
+            <div class="pbody">
+              <label class="elabel" for="eWhen">Schedule</label>
+              <input class="etime" id="eWhen" type="datetime-local" style="width: 100%;">
+              <div class="eactions">
+                <button class="btn primary" id="eSchedule">Queue</button>
+                <button class="btn" id="ePublish">Publish now</button>
+              </div>
+              <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
+              <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
+              <div class="eactions"><button class="btn danger" id="eDelete">Delete draft</button></div>
+            </div>
           </section>
         </div>
       </div>
