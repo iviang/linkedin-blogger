@@ -234,6 +234,8 @@ def run_check(reference: str, draft_body: str) -> dict:
 
 def apply_override(draft_id: str, flag_id: str, reason: str = "") -> dict:
     """Mark one check flag as overridden by the owner."""
+    if flag_id == "length-long":
+        raise SystemExit("The word limit cannot be overridden. Trim the draft under the limit.")
     check = load_check(draft_id)
     if not check:
         raise SystemExit(f"No check results for {draft_id}. Run: python blogger.py check {draft_id}")

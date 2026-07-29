@@ -665,22 +665,39 @@
     function renderCheck(detail) {
       var flags = document.getElementById("eFlags");
       var check = detail.check;
-      if (detail.check_stale) {
+      var over = wordCount() > MAX_WORDS;
+
+      // Displayed flags: the saved check's flags (minus any length flag, which we compute live)
+      // plus a non-overridable over-limit flag whenever the draft is too long. An over-length
+      // draft then shows the problem the moment it opens, before any check has been run.
+      var list = (check && check.flags) ? check.flags.filter(function (f) { return f.category !== "length"; }) : [];
+      if (over) {
+        list = [{
+          id: "length-long", category: "length", noOverride: true,
+          message: "Post is " + wordCount() + " words, over the " + MAX_WORDS + "-word limit. Trim it to queue or publish."
+        }].concat(list);
+      }
+
+      if (over) {
+        eNote("Over the " + MAX_WORDS + "-word limit. Trim it before queuing.", "warn");
+      } else if (detail.check_stale) {
         eNote("Body changed since the last check. Run check again.", "warn");
       } else if (!check) {
         eNote(detail.has_gaps ? "Fill every [YOUR VOICE] gap, then run check." : "Not checked yet.");
-      } else if (check.passed) {
-        eNote("Check passed. Ready to schedule or publish.", "ok");
       } else {
-        eNote("Check found issues. Edit the draft, or override what you accept.", "warn");
+        var openCount = list.filter(function (f) { return !f.overridden; }).length;
+        eNote(openCount ? "Check found issues. Edit the draft, or override what you accept." : "Check passed. Ready to schedule or publish.",
+          openCount ? "warn" : "ok");
       }
-      if (!check || !check.flags || !check.flags.length) { flags.innerHTML = ""; return; }
-      flags.innerHTML = check.flags.map(function (f) {
+
+      if (!list.length) { flags.innerHTML = ""; return; }
+      flags.innerHTML = list.map(function (f) {
         var ovr = f.overridden;
         var hasEx = !!f.excerpt;
         var hasSug = !!f.suggestion;
         var status = f.accepted ? '<span class="note ok">accepted</span>'
           : ovr ? '<span class="note ok">overridden</span>'
+          : f.noOverride ? ""
           : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>';
         var sug = (hasSug && !ovr)
           ? '<div class="flag-sug"><div class="flag-sug-h">Suggested fix</div><div class="flag-sug-t">' +
