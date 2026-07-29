@@ -385,19 +385,28 @@
           </section>
           <section class="panel" id="previewPanel">
             <div class="phead"><h2>Preview</h2><button class="btn" id="ePreviewBtn">Show preview</button></div>
-            <div class="pbody">
-              <div class="pv" id="ePreview" hidden>
-                <div class="pv-head">
-                  <div class="pv-av" id="pvAv">VN</div>
-                  <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
-                </div>
-                <div class="pv-text" id="pvText"></div>
-                <div class="pv-imgs" id="pvImgs"></div>
-                <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
-              </div>
-              <p class="empty" id="previewHint" style="margin: 0;">Shows the post as it will appear on LinkedIn.</p>
-            </div>
+            <div class="pbody"><p class="empty" style="margin: 0;">Opens the post at LinkedIn's width, with your name and photo.</p></div>
           </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cmp-overlay" id="pvOverlay" hidden>
+    <div class="cmp" style="width: min(580px, 100%);" role="dialog" aria-modal="true" aria-label="Post preview">
+      <div class="cmp-head">
+        <div><h3>Post preview</h3><p>As it will appear on your LinkedIn feed</p></div>
+        <button class="btn" id="pvClose">Close</button>
+      </div>
+      <div style="padding: 16px 18px; overflow: auto;">
+        <div class="pv" id="ePreview">
+          <div class="pv-head">
+            <div class="pv-av" id="pvAv">VN</div>
+            <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+          </div>
+          <div class="pv-text" id="pvText"></div>
+          <div class="pv-imgs" id="pvImgs"></div>
+          <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
         </div>
       </div>
     </div>
@@ -837,7 +846,7 @@
       document.getElementById("eDelete").disabled = true;
       applyGate();
       eSchedNote("Start typing to save the draft, then you can schedule it."); ePubNote("");
-      document.getElementById("ePreview").hidden = true; document.getElementById("ePreviewBtn").textContent = "Show preview";
+      document.getElementById("pvOverlay").hidden = true;
       loadVersions(null);
     }
 
@@ -899,9 +908,7 @@
       publishLocked = detail.status === "posted" || detail.status === "posting" || detail.status === "skeleton";
       ePubNote(detail.status === "posted" ? "Already posted." : "");
 
-      document.getElementById("ePreview").hidden = true;
-      document.getElementById("previewHint").hidden = false;
-      document.getElementById("ePreviewBtn").textContent = "Show preview";
+      document.getElementById("pvOverlay").hidden = true;
 
       applyGate();
       loadVersions(detail.id);
@@ -1236,12 +1243,16 @@
       });
     }
     document.getElementById("ePreviewBtn").addEventListener("click", function () {
-      var pv = document.getElementById("ePreview");
-      if (pv.hidden) { renderPreview(); pv.hidden = false; document.getElementById("previewHint").hidden = true; this.textContent = "Hide preview"; }
-      else { pv.hidden = true; document.getElementById("previewHint").hidden = false; this.textContent = "Show preview"; }
+      renderPreview();
+      document.getElementById("pvOverlay").hidden = false;
+    });
+    document.getElementById("pvClose").addEventListener("click", function () { document.getElementById("pvOverlay").hidden = true; });
+    document.getElementById("pvOverlay").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !document.getElementById("pvOverlay").hidden) document.getElementById("pvOverlay").hidden = true;
     });
     document.getElementById("ePost").addEventListener("input", function () {
-      if (!document.getElementById("ePreview").hidden) renderPreview();
+      if (!document.getElementById("pvOverlay").hidden) renderPreview();
     });
 
     document.getElementById("ePublish").addEventListener("click", async function () {
