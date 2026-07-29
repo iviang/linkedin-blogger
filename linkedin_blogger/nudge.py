@@ -25,14 +25,22 @@ def build_message(prepared: bool) -> EmailMessage:
     msg["From"] = config.NUDGE_FROM
     msg["To"] = config.NUDGE_TO
 
+    last = state.get_last_posted_at()
+    if last:
+        local = last.astimezone()
+        when = f"{local.strftime('%B')} {local.day}, {local.year}"
+        days = (datetime.now(timezone.utc) - last).days
+        since = f"Your last post was on {when} ({days} days ago). "
+    else:
+        since = "You have not posted yet. "
+
     if prepared:
         intro = (
-            "It has been a while since your last post. Your reference material was just "
-            "refreshed from your logs and GitHub activity, so you can skip ingest and go "
-            "straight to brainstorming."
+            since + "Your reference material was just refreshed from your logs and GitHub "
+            "activity, so you can skip ingest and go straight to brainstorming."
         )
     else:
-        intro = "It has been a while since your last post. Time to write the next one."
+        intro = since + ("Time to write the next one." if last else "Time to write your first one.")
 
     body = f"""{intro}
 
