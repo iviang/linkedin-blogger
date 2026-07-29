@@ -39,6 +39,10 @@ DRAFT_LOOKBACK_DAYS = int(os.getenv("DRAFT_LOOKBACK_DAYS", "7"))
 # Stage B: how many ideas Claude brainstorms before the owner picks one.
 BRAINSTORM_IDEA_COUNT = int(os.getenv("BRAINSTORM_IDEA_COUNT", "3"))
 
+# Maximum words a draft may have to be queued or published. Matches the check's upper target;
+# over this, queuing and publishing are blocked until the draft is trimmed.
+MAX_POST_WORDS = int(os.getenv("MAX_POST_WORDS", "220"))
+
 # Default days between scheduled posts. Used when a draft is queued without an explicit
 # time: it lands this many days after the last post already in the queue. This is only the
 # default; the owner can change it in the UI (stored in state.json), which wins over this.

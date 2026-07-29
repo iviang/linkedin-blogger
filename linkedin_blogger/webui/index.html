@@ -379,6 +379,7 @@
             <div class="pbody">
               <label class="elabel" for="eWhen">Schedule</label>
               <input class="etime" id="eWhen" type="datetime-local" style="width: 100%;">
+              <span class="note warn" id="gateWarn" hidden style="display: block; margin: 8px 0 0;">Over the 220-word limit. Trim the draft to queue or publish.</span>
               <div class="eactions">
                 <button class="btn primary" id="eSchedule">Queue</button>
                 <button class="btn" id="ePublish">Publish now</button>
@@ -697,18 +698,36 @@
       });
     }
 
+    var MAX_WORDS = 220;
+    // Base disabled state of the queue/publish buttons (from status/lock), before the word
+    // limit is applied on top.
+    var scheduleLocked = true, publishLocked = true;
+
+    function wordCount() {
+      var t = document.getElementById("ePost").value.trim();
+      return t ? t.split(/\s+/).length : 0;
+    }
+
+    // A draft over the word limit cannot be queued or published until it is trimmed.
+    function applyGate() {
+      var over = wordCount() > MAX_WORDS;
+      document.getElementById("eSchedule").disabled = scheduleLocked || over;
+      document.getElementById("ePublish").disabled = publishLocked || over;
+      document.getElementById("gateWarn").hidden = !over;
+    }
+
     // Word count against LinkedIn's 120-220 target: the meter fills toward 220, and it turns
     // amber under 120 (too short) or red over 220 (too long).
     function updateWordCount() {
-      var text = document.getElementById("ePost").value.trim();
-      var n = text ? text.split(/\s+/).length : 0;
+      var n = wordCount();
       var wc = document.getElementById("wordCount");
-      wc.textContent = n + " / 220 words";
-      var state = n > 220 ? "over" : (n > 0 && n < 120 ? "under" : "");
+      wc.textContent = n + " / " + MAX_WORDS + " words";
+      var state = n > MAX_WORDS ? "over" : (n > 0 && n < 120 ? "under" : "");
       wc.className = "wordcount" + (state ? " " + state : "");
       var meter = document.getElementById("wordMeter");
-      meter.style.width = Math.min(100, Math.round(n / 220 * 100)) + "%";
+      meter.style.width = Math.min(100, Math.round(n / MAX_WORDS * 100)) + "%";
       meter.className = state;
+      applyGate();
     }
 
     function relDate(iso) {
@@ -784,9 +803,10 @@
       document.getElementById("eMediaWarn").hidden = true;
       var drop = document.getElementById("eDrop"); drop.style.pointerEvents = ""; drop.style.opacity = "";
       document.getElementById("eWhen").value = ""; document.getElementById("eWhen").disabled = false;
-      var sb = document.getElementById("eSchedule"); sb.textContent = "Queue"; sb.disabled = true;
+      document.getElementById("eSchedule").textContent = "Queue";
+      scheduleLocked = true; publishLocked = true;
       document.getElementById("eDelete").disabled = true;
-      document.getElementById("ePublish").disabled = true;
+      applyGate();
       eSchedNote("Start typing to save the draft, then you can schedule it."); ePubNote("");
       document.getElementById("ePreview").hidden = true; document.getElementById("ePreviewBtn").textContent = "Show preview";
       loadVersions(null);
@@ -796,9 +816,9 @@
     function adoptCreatedDraft(detail) {
       currentDraftId = detail.id; currentStatus = detail.status; currentMedia = detail.media || [];
       document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
-      document.getElementById("eSchedule").disabled = false;
+      scheduleLocked = false; publishLocked = false;
       document.getElementById("eDelete").disabled = false;
-      document.getElementById("ePublish").disabled = false;
+      applyGate();
       eSchedNote("Not scheduled. Leave the time empty to auto-space it after the queue.");
       loadVersions(detail.id);
     }
@@ -828,7 +848,7 @@
       var queued = detail.status === "queued" || detail.status === "approved" || detail.status === "failed";
       var schedBtn = document.getElementById("eSchedule");
       schedBtn.textContent = queued ? "Update schedule" : "Queue";
-      schedBtn.disabled = ro;
+      scheduleLocked = ro;
       document.getElementById("eDelete").disabled = detail.status === "posted" || detail.status === "posting";
       eSchedNote(detail.scheduled_at
         ? "Currently " + new Date(detail.scheduled_at).toLocaleString()
@@ -847,13 +867,13 @@
         mw.hidden = true;
       }
 
-      var pubBtn = document.getElementById("ePublish");
-      pubBtn.disabled = detail.status === "posted" || detail.status === "posting" || detail.status === "skeleton";
+      publishLocked = detail.status === "posted" || detail.status === "posting" || detail.status === "skeleton";
       ePubNote(detail.status === "posted" ? "Already posted." : "");
 
       document.getElementById("ePreview").hidden = true;
       document.getElementById("ePreviewBtn").textContent = "Show preview";
 
+      applyGate();
       loadVersions(detail.id);
     }
 

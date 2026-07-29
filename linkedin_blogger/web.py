@@ -398,6 +398,10 @@ def create_app() -> Flask:
             return {"error": "Fill the gaps and run check before scheduling."}, 400
         queue.assert_editable(meta)  # locked -> SystemExit -> guarded 400
 
+        words = len(body.split())
+        if words > config.MAX_POST_WORDS:
+            return {"error": f"Draft is {words} words, over the {config.MAX_POST_WORDS}-word limit. Trim it before queuing."}, 400
+
         # First-time scheduling of a checked draft must actually be ready; rescheduling one
         # that is already queued/approved/failed just moves the time.
         if status not in ("queued", "approved", "failed") and meta.get("flow") == "stage_b":
@@ -557,6 +561,8 @@ def create_app() -> Flask:
     def _publish_one(draft_id: str, path):
         """Shared publish for a single draft file. Returns (ok, error_or_None)."""
         meta, body = drafts.read_draft(path)
+        if len(body.split()) > config.MAX_POST_WORDS:
+            return False, f"Over the {config.MAX_POST_WORDS}-word limit; trim before publishing."
 
         def write_draft(updated_meta, updated_body):
             drafts.write_draft(updated_meta, updated_body, path)
@@ -586,6 +592,9 @@ def create_app() -> Flask:
             ready, message = processing.check_ready_for_approve(draft_id)
             if not ready:
                 return {"error": message}, 400
+        words = len(body.split())
+        if words > config.MAX_POST_WORDS:
+            return {"error": f"Draft is {words} words, over the {config.MAX_POST_WORDS}-word limit. Trim it before publishing."}, 400
         ok, error = _publish_one(draft_id, path)
         return {"ok": ok, "error": error, "draft": _draft_detail(draft_id)}
 
