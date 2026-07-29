@@ -70,11 +70,18 @@ whether something is a subjective reflection or a factual claim, do not flag it.
 
 Rules:
 - Be specific. Each flag needs a short message and an optional excerpt from the draft.
+- For a fixable issue (grammar, a typo, broken formatting, a clear factual correction), set \
+"excerpt" to the exact verbatim text from the draft that should change, and "suggestion" to \
+the corrected text that should replace it. The suggestion must be a drop-in replacement for \
+the excerpt: substituting it for the excerpt should read correctly with no other edits. Omit \
+"suggestion" when there is no single clear fix (for example a length problem or a subjective \
+concern the author must resolve themselves).
 - If the draft is clean, return passed: true with an empty flags array.
-- No em dashes in message strings.
+- No em dashes in message strings or suggestions.
 - Return only JSON with this shape:
 {"passed": boolean, "flags": [{"id": "category-N", "category": "...", "message": "...", \
-"excerpt": "..."}]}
+"excerpt": "verbatim text from the draft", "suggestion": "corrected replacement for the \
+excerpt, or omit"}]}
 - Use stable ids like grammar-1, factualness-1. Category must be one of: discrepancy, \
 grammar, formatting, factualness, length."""
 
@@ -229,6 +236,35 @@ def apply_override(draft_id: str, flag_id: str, reason: str = "") -> dict:
     check["passed"] = len(unresolved) == 0
     save_check(draft_id, check)
     return check
+
+
+def apply_suggestion(draft_id: str, flag_id: str, body: str) -> str:
+    """Apply a flag's suggested fix to the body and mark the flag accepted. Returns the new
+    body. Raises SystemExit if the flag has no suggestion or its excerpt is gone."""
+    check = load_check(draft_id)
+    if not check:
+        raise SystemExit(f"No check results for {draft_id}. Run: python blogger.py check {draft_id}")
+
+    target = next((f for f in check.get("flags", []) if f.get("id") == flag_id), None)
+    if target is None:
+        raise SystemExit(f"No flag with id {flag_id!r} in the latest check for {draft_id}.")
+
+    excerpt = target.get("excerpt")
+    suggestion = target.get("suggestion")
+    if not excerpt or suggestion is None:
+        raise SystemExit("That flag has no suggested fix to accept.")
+    if excerpt not in body:
+        raise SystemExit("The flagged text is not in the draft anymore. Re-run the check.")
+
+    new_body = body.replace(excerpt, suggestion, 1)
+    target["overridden"] = True
+    target["accepted"] = True
+    unresolved = [f for f in check["flags"] if not f.get("overridden")]
+    check["passed"] = len(unresolved) == 0
+    # The body changed, so keep the check in step with it rather than marking it stale.
+    check["body_sha"] = _body_sha(new_body)
+    save_check(draft_id, check)
+    return new_body
 
 
 def check_ready_for_approve(draft_id: str) -> tuple[bool, str]:

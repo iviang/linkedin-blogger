@@ -182,6 +182,9 @@
   .flag.has-ex { cursor: pointer; }
   .flag.has-ex:hover { border-color: var(--navy); border-left-color: var(--navy); }
   .flag-hint { font-size: 11px; color: var(--navy); margin-top: 6px; }
+  .flag-sug { margin-top: 10px; border-top: 1px dashed var(--line2); padding-top: 9px; }
+  .flag-sug-h { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--ok-ink); margin-bottom: 5px; }
+  .flag-sug-t { font-size: 12.5px; color: var(--ink); background: var(--ok-bg); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
   .flag-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
   .flag-cat { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn-ink); }
   .flag-msg { font-size: 13px; margin-top: 6px; line-height: 1.45; }
@@ -627,17 +630,26 @@
       flags.innerHTML = check.flags.map(function (f) {
         var ovr = f.overridden;
         var hasEx = !!f.excerpt;
+        var hasSug = !!f.suggestion;
+        var status = f.accepted ? '<span class="note ok">accepted</span>'
+          : ovr ? '<span class="note ok">overridden</span>'
+          : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>';
+        var sug = (hasSug && !ovr)
+          ? '<div class="flag-sug"><div class="flag-sug-h">Suggested fix</div><div class="flag-sug-t">' +
+            esc(f.suggestion) + '</div><button class="btn primary" data-accept="' + esc(f.id) + '">Accept fix</button></div>'
+          : "";
         return '<div class="flag' + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
           (hasEx ? ' data-excerpt="' + esc(f.excerpt) + '" title="Click to find this in the draft"' : "") +
-          '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" +
-          (ovr ? '<span class="note ok">overridden</span>'
-               : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>') +
+          '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" + status +
           '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
           (hasEx ? '<div class="flag-ex">' + esc(f.excerpt) + "</div><div class=\"flag-hint\">Click to highlight in the draft</div>" : "") +
-          "</div>";
+          sug + "</div>";
       }).join("");
       Array.prototype.forEach.call(flags.querySelectorAll("button[data-flag]"), function (btn) {
         btn.addEventListener("click", function (e) { e.stopPropagation(); overrideFlag(this.getAttribute("data-flag")); });
+      });
+      Array.prototype.forEach.call(flags.querySelectorAll("button[data-accept]"), function (btn) {
+        btn.addEventListener("click", function (e) { e.stopPropagation(); acceptFlag(this.getAttribute("data-accept")); });
       });
       Array.prototype.forEach.call(flags.querySelectorAll(".flag.has-ex"), function (fl) {
         fl.addEventListener("click", function () { highlightExcerpt(this.getAttribute("data-excerpt")); });
@@ -876,6 +888,19 @@
         fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/override",
           { flag_id: flagId }));
         load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function acceptFlag(flagId) {
+      if (!currentDraftId) return;
+      eNote("Applying the fix…", "busy");
+      try {
+        // Flush any pending edit so the fix applies on top of the latest text.
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/accept",
+          { flag_id: flagId }));
+        load();
+        eNote("Fix applied.", "ok");
       } catch (e) { eNote(e.message, "warn"); }
     }
 

@@ -296,6 +296,26 @@ def create_app() -> Flask:
         versions.record(draft_id, "override", f"Overrode {flag_id}", meta.get("idea_title", ""), body, "you")
         return _draft_detail(draft_id)
 
+    @app.post("/api/drafts/<draft_id>/accept")
+    @guarded
+    def api_draft_accept(draft_id):
+        """Apply a flag's suggested fix to the draft body."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        queue.assert_editable(meta)
+        data = request.get_json(silent=True) or {}
+        flag_id = data.get("flag_id")
+        if not flag_id:
+            return {"error": "Missing flag_id."}, 400
+        new_body = processing.apply_suggestion(draft_id, flag_id, body)
+        if meta.get("status") == "skeleton" and processing.check_ready_for_approve(draft_id)[0]:
+            meta["status"] = "pending"
+        drafts.write_draft(meta, new_body, path)
+        versions.record(draft_id, "edit", f"Accepted fix for {flag_id}", meta.get("idea_title", ""), new_body, "you")
+        return _draft_detail(draft_id)
+
     @app.get("/api/drafts/<draft_id>/versions")
     def api_versions(draft_id):
         return {"versions": versions.summaries(draft_id)}
