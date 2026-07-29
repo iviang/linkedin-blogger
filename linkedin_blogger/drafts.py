@@ -107,6 +107,7 @@ def list_drafts() -> list[dict]:
                 "preview": body.replace("\n", " ")[:140],
                 "scheduled_at": meta.get("scheduled_at"),
                 "media_count": len(get_media(meta)),
+                "words": len(body.split()),
             }
         )
     return out

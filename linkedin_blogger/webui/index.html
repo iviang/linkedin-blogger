@@ -16,8 +16,10 @@
             --line:#2A313A; --line2:#343C45; --navy:#8FB8DC; --navy-soft:#1E2B39;
             --ok:#46C79C; --ok-bg:#123528; --ok-ink:#7FE0BF; --warn:#E0A45E; --warn-bg:#3A2A17; --warn-ink:#F0C48D; }
   }
-  :root { --cat-fact: #C0392B; --cat-grammar: #2D6CB6; --cat-format: #B4720F; --cat-length: #6B5FA8; }
-  @media (prefers-color-scheme: dark) { :root { --cat-fact: #E8897F; --cat-grammar: #7FB2E8; --cat-format: #E0A45E; --cat-length: #B3A6E0; } }
+  :root { --cat-fact: #C0392B; --cat-grammar: #2D6CB6; --cat-format: #B4720F; --cat-length: #6B5FA8;
+          --cat-fact-bg: #F7E4E1; --st-queued-bg: #ECEAF7; }
+  @media (prefers-color-scheme: dark) { :root { --cat-fact: #E8897F; --cat-grammar: #7FB2E8; --cat-format: #E0A45E; --cat-length: #B3A6E0;
+          --cat-fact-bg: #3A1C18; --st-queued-bg: #221E33; } }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; color-scheme: light dark; }
@@ -96,10 +98,13 @@
   .row-meta { text-align: right; flex: none; }
   .row-id { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
   .row-sched { font-size: 11.5px; color: var(--navy); margin-top: 3px; }
-  .st { font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
+  .st { font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--faint); }
+  .st.skeleton { background: var(--line); color: var(--faint); }
+  .st.pending { background: var(--navy-soft); color: var(--navy); }
+  .st.queued, .st.approved { background: var(--st-queued-bg); color: var(--cat-length); }
   .st.posted { background: var(--ok-bg); color: var(--ok-ink); }
   .st.failed { background: var(--warn-bg); color: var(--warn-ink); }
-  .st.skeleton, .st.pending { background: var(--line); color: var(--muted); }
+  .mark { font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--cat-fact-bg); color: var(--cat-fact); }
 
   .btn { font: inherit; font-size: 13px; font-weight: 600; border-radius: 9px; padding: 7px 13px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); cursor: pointer; }
   .btn:hover { border-color: var(--navy); }
@@ -436,8 +441,9 @@
       if (!items.length) { el.innerHTML = '<p class="empty">' + emptyMsg + "</p>"; return; }
       el.innerHTML = items.map(function (it) {
         var sched = it.scheduled_at ? '<div class="row-sched">' + new Date(it.scheduled_at).toLocaleString() + "</div>" : "";
+        var mark = it.words > MAX_WORDS ? ' <span class="mark">too long</span>' : "";
         return '<div class="row" data-id="' + esc(it.id) + '"><div class="row-main"><div class="row-t">' +
-          esc(it.title || "(untitled)") + " " + pill(it.status) + '</div><div class="row-p">' +
+          esc(it.title || "(untitled)") + " " + pill(it.status) + mark + '</div><div class="row-p">' +
           esc(it.preview) + '&hellip;</div></div><div class="row-meta"><div class="row-id">' +
           esc(it.id) + "</div>" + sched + "</div></div>";
       }).join("");
@@ -448,8 +454,9 @@
       if (!items.length) { el.innerHTML = '<p class="empty">Queue is empty.</p>'; return; }
       el.innerHTML = items.map(function (it) {
         var when = it.scheduled_at ? new Date(it.scheduled_at).toLocaleString() : "unscheduled";
+        var mark = it.words > MAX_WORDS ? ' <span class="mark">too long</span>' : "";
         return '<div class="qitem" data-id="' + esc(it.id) + '"><div class="qi-t">' +
-          esc(it.title || "(untitled)") + '</div><div class="qi-m">' + esc(when) + "</div></div>";
+          esc(it.title || "(untitled)") + mark + '</div><div class="qi-m">' + esc(when) + "</div></div>";
       }).join("");
     }
 
