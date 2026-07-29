@@ -906,8 +906,9 @@
       var queued = detail.status === "queued" || detail.status === "approved" || detail.status === "failed";
       var schedBtn = document.getElementById("eSchedule");
       schedBtn.textContent = queued ? "Update schedule" : "Queue";
-      // Only a queued draft that is still editable (not inside the publish lock) can be pulled out.
-      document.getElementById("eUnqueue").hidden = !(queued && !ro);
+      // Any queued draft can be pulled out, even a locked one: de-queuing cancels the post
+      // rather than editing it, so it stays available inside the publish lock.
+      document.getElementById("eUnqueue").hidden = !queued;
       scheduleLocked = ro;
       document.getElementById("eDelete").disabled = detail.status === "posted" || detail.status === "posting";
       eSchedNote(detail.scheduled_at

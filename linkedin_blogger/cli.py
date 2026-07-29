@@ -386,7 +386,8 @@ def cmd_unqueue(args):
     meta, body = _read_draft(path)
     if meta.get("status") not in ("queued", "approved", "failed"):
         raise SystemExit("Only a queued draft can be removed from the queue.")
-    queue.assert_editable(meta)
+    # No edit-lock check: de-queuing cancels the post, it does not edit its wording, so it
+    # stays available even for a draft inside the publish lock window.
     meta["status"] = "pending"
     meta.pop("scheduled_at", None)
     meta.pop("publish_error", None)

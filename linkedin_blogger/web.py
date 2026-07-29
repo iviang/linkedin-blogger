@@ -457,14 +457,15 @@ def create_app() -> Flask:
     @guarded
     def api_draft_unqueue(draft_id):
         """Pull a queued draft back out of the queue: clear its schedule and return it to the
-        drafts list as an editable draft. Blocked once it is locked within the publish window."""
+        drafts list as an editable draft. Always available for a queued draft, even inside the
+        publish lock, because this cancels the post rather than editing its content: the lock
+        exists to freeze wording before publish, not to force an about-to-post draft out."""
         path = drafts.draft_path(draft_id)
         if not path.exists():
             return {"error": "No draft with that id."}, 404
         meta, body = drafts.read_draft(path)
         if meta.get("status") not in ("queued", "approved", "failed"):
             return {"error": "Only a queued draft can be removed from the queue."}, 400
-        queue.assert_editable(meta)  # locked within the publish window -> SystemExit -> 400
         meta["status"] = "pending"
         meta.pop("scheduled_at", None)
         meta.pop("publish_error", None)
