@@ -68,6 +68,45 @@ def queue_meta(scheduled_at: datetime) -> dict:
     }
 
 
+def default_schedule(exclude_id: str | None = None) -> datetime:
+    """Time to use when a draft is queued without an explicit date.
+
+    Land it one posting interval after the furthest-out post already in the pipeline: the
+    latest already-scheduled queued post, or the last live post if that is later. With
+    nothing scheduled and no prior post yet, still space it one interval out from now, so a
+    first post is never queued for the current moment. `exclude_id` skips the draft being
+    queued so its own (about to be replaced) schedule is not treated as an anchor.
+    """
+    interval = timedelta(days=state.get_post_interval_days())
+    anchors = []
+    for item in drafts.list_drafts():
+        if item["id"] == exclude_id:
+            continue
+        if item["status"] in ("queued", "approved") and item.get("scheduled_at"):
+            anchors.append(parse_scheduled_at(item["scheduled_at"]))
+    last_posted = state.get_last_posted_at()
+    if last_posted:
+        anchors.append(last_posted)
+    base = max(anchors) if anchors else datetime.now().astimezone()
+    return base + interval
+
+
+def assert_min_lead(scheduled: datetime) -> None:
+    """Guard an explicitly chosen time: if it falls on today (the owner's local day), it must
+    be at least SAME_DAY_MIN_LEAD_MINUTES ahead of now. A time on a later day is exempt; a
+    time earlier today (or already past today) fails. Raises SystemExit so the web layer's
+    guard turns it into a clean 400 and the CLI prints it."""
+    now = datetime.now().astimezone()
+    local = _aware(scheduled).astimezone()
+    if local.date() != now.date():
+        return
+    if local < now + timedelta(minutes=config.SAME_DAY_MIN_LEAD_MINUTES):
+        raise SystemExit(
+            f"A post scheduled for today must be at least {config.SAME_DAY_MIN_LEAD_MINUTES} "
+            "minutes from now. Pick a later time today, or a future date."
+        )
+
+
 def ready_to_publish(meta: dict) -> bool:
     status = meta.get("status")
     if status not in ("approved", "queued"):

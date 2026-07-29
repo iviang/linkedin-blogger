@@ -386,6 +386,7 @@
               <div class="eactions">
                 <button class="btn primary" id="eSchedule">Queue</button>
                 <button class="btn" id="ePublish">Publish now</button>
+                <button class="btn danger" id="eUnqueue" hidden>Remove from queue</button>
               </div>
               <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
               <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
@@ -860,6 +861,7 @@
       var drop = document.getElementById("eDrop"); drop.style.pointerEvents = ""; drop.style.opacity = "";
       document.getElementById("eWhen").value = ""; document.getElementById("eWhen").disabled = false;
       document.getElementById("eSchedule").textContent = "Queue";
+      document.getElementById("eUnqueue").hidden = true;
       scheduleLocked = true; publishLocked = true;
       document.getElementById("eDelete").disabled = true;
       applyGate();
@@ -904,6 +906,8 @@
       var queued = detail.status === "queued" || detail.status === "approved" || detail.status === "failed";
       var schedBtn = document.getElementById("eSchedule");
       schedBtn.textContent = queued ? "Update schedule" : "Queue";
+      // Only a queued draft that is still editable (not inside the publish lock) can be pulled out.
+      document.getElementById("eUnqueue").hidden = !(queued && !ro);
       scheduleLocked = ro;
       document.getElementById("eDelete").disabled = detail.status === "posted" || detail.status === "posting";
       eSchedNote(detail.scheduled_at
@@ -1052,6 +1056,19 @@
         var payload = raw ? { scheduled_at: toISOWithOffset(raw) } : {};
         fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/schedule", payload));
         load();
+      } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    document.getElementById("eUnqueue").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      if (!window.confirm("Remove draft " + currentDraftId + " from the queue? It returns to your drafts, unscheduled.")) return;
+      this.disabled = true;
+      eSchedNote("Removing from the queue…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/unqueue", {}));
+        load();
+        eSchedNote("Removed from the queue. It is back in your drafts, unscheduled.", "ok");
       } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
     });
 

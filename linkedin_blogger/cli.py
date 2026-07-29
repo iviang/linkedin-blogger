@@ -352,8 +352,11 @@ def cmd_approve(args):
 
     if args.at:
         scheduled = queue.parse_scheduled_at(args.at)
+        queue.assert_min_lead(scheduled)
     else:
-        scheduled = datetime.now().astimezone()
+        # No time given: space it one interval after the queue (or the last post), matching
+        # the web UI. With nothing scheduled yet, that is one interval from now, never now.
+        scheduled = queue.default_schedule(args.id)
 
     meta.update(queue.queue_meta(scheduled))
     _write_draft(meta, body, path)
@@ -372,9 +375,24 @@ def cmd_schedule(args):
     queue.assert_editable(meta)
 
     scheduled = queue.parse_scheduled_at(args.at)
+    queue.assert_min_lead(scheduled)
     meta.update(queue.queue_meta(scheduled))
     _write_draft(meta, body, path)
     print(f"Rescheduled {args.id} for {scheduled.isoformat(timespec='seconds')}")
+
+
+def cmd_unqueue(args):
+    path = _find_draft(args.id)
+    meta, body = _read_draft(path)
+    if meta.get("status") not in ("queued", "approved", "failed"):
+        raise SystemExit("Only a queued draft can be removed from the queue.")
+    queue.assert_editable(meta)
+    meta["status"] = "pending"
+    meta.pop("scheduled_at", None)
+    meta.pop("publish_error", None)
+    meta.pop("failed_at", None)
+    _write_draft(meta, body, path)
+    print(f"Removed {args.id} from the queue. It is back in your drafts, unscheduled.")
 
 
 def cmd_attach(args):
@@ -511,7 +529,8 @@ def main(argv=None):
     approve.add_argument(
         "--at",
         default="",
-        help="When to publish (ISO datetime). Default: now (publish on next publish run).",
+        help="When to publish (ISO datetime). Default: one posting interval after the queue "
+        "(or the last post); a same-day time must be at least 30 minutes out.",
     )
     approve.set_defaults(func=cmd_approve)
 
@@ -519,6 +538,10 @@ def main(argv=None):
     schedule.add_argument("id")
     schedule.add_argument("--at", required=True, help="New publish time (ISO datetime).")
     schedule.set_defaults(func=cmd_schedule)
+
+    unqueue = sub.add_parser("unqueue", help="Remove a queued draft from the queue (back to drafts).")
+    unqueue.add_argument("id")
+    unqueue.set_defaults(func=cmd_unqueue)
 
     attach = sub.add_parser("attach", help="Attach an image to a queued draft (jpg/png/gif).")
     attach.add_argument("id")

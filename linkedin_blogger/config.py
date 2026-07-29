@@ -74,6 +74,11 @@ VIDEO_MIN_SECONDS = int(os.getenv("LINKEDIN_VIDEO_MIN_SECONDS", "3"))
 # Stage C: publish queue lock window (minutes before scheduled_at when edits stop).
 QUEUE_LOCK_MINUTES = int(os.getenv("QUEUE_LOCK_MINUTES", "15"))
 
+# A post scheduled for the current day must be at least this many minutes ahead of now, so a
+# same-day queue can never fire almost immediately after it is set. Times on a later day are
+# exempt (any time of day is fine once it is not today).
+SAME_DAY_MIN_LEAD_MINUTES = int(os.getenv("SAME_DAY_MIN_LEAD_MINUTES", "30"))
+
 # Stage C: weekly email nudge over SMTP (Gmail app password works).
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

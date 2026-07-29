@@ -441,28 +441,38 @@ def create_app() -> Flask:
             if not ready:
                 return {"error": message}, 400
 
-        # No time given means "space it after the queue": land it one interval after the
-        # latest already-scheduled post (or the last live post), else schedule for now.
-        scheduled = queue.parse_scheduled_at(when) if when else _default_schedule(draft_id)
+        # An explicit time on today must clear the same-day lead window; no time given means
+        # "space it after the queue", one interval past the furthest post (or now if empty).
+        if when:
+            scheduled = queue.parse_scheduled_at(when)
+            queue.assert_min_lead(scheduled)  # same-day-too-soon -> SystemExit -> guarded 400
+        else:
+            scheduled = queue.default_schedule(draft_id)
         meta.update(queue.queue_meta(scheduled))
         drafts.write_draft(meta, body, path)
         _log(f"queue: {draft_id} scheduled for {scheduled.astimezone().strftime('%Y-%m-%d %H:%M')}")
         return _draft_detail(draft_id)
 
-    def _default_schedule(exclude_id: str) -> datetime:
-        interval = timedelta(days=state.get_post_interval_days())
-        anchors = []
-        for item in drafts.list_drafts():
-            if item["id"] == exclude_id:
-                continue
-            if item["status"] in ("queued", "approved") and item.get("scheduled_at"):
-                anchors.append(queue.parse_scheduled_at(item["scheduled_at"]))
-        last_posted = state.get_last_posted_at()
-        if last_posted:
-            anchors.append(last_posted)
-        if anchors:
-            return max(anchors) + interval
-        return datetime.now().astimezone()
+    @app.post("/api/drafts/<draft_id>/unqueue")
+    @guarded
+    def api_draft_unqueue(draft_id):
+        """Pull a queued draft back out of the queue: clear its schedule and return it to the
+        drafts list as an editable draft. Blocked once it is locked within the publish window."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        if meta.get("status") not in ("queued", "approved", "failed"):
+            return {"error": "Only a queued draft can be removed from the queue."}, 400
+        queue.assert_editable(meta)  # locked within the publish window -> SystemExit -> 400
+        meta["status"] = "pending"
+        meta.pop("scheduled_at", None)
+        meta.pop("publish_error", None)
+        meta.pop("failed_at", None)
+        drafts.write_draft(meta, body, path)
+        versions.record(draft_id, "unqueue", "Removed from queue", meta.get("idea_title", ""), body, "you")
+        _log(f"queue: {draft_id} removed from the queue, back to drafts")
+        return _draft_detail(draft_id)
 
     @app.get("/api/settings")
     def api_settings_get():
