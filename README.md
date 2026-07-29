@@ -6,7 +6,8 @@ automation and human-computer interaction (HCI) principles.
 A personal tool that drafts LinkedIn posts from your work notes and publishes the ones you
 approve, on a weekly schedule. You stay the author: the automation handles the gathering,
 ideating, and posting, while every judgment call stays with you. Posts go to your personal
-profile through LinkedIn's official API.
+profile through LinkedIn's official API. It runs as a local web app in your browser, or from
+the command line.
 
 ## The pipeline
 
@@ -28,29 +29,63 @@ The design principle is human-in-the-loop: automation does the gathering, ideati
 publishing, but which idea, the final wording, and the go-ahead are all yours. Nothing
 publishes without your approval.
 
+## Web interface
+
+The main way to use the tool is a local web app. Nothing is hosted: it binds to
+`127.0.0.1`, so your notes and tokens never leave the machine.
+
+```bash
+python blogger.py serve      # opens http://localhost:5000
+```
+
+The whole pipeline runs in the browser:
+
+- **Sidebar.** A pipeline stepper (ingest, brainstorm, write, check, queue), status chips,
+  the reference vintage and days until the next nudge, the publish queue, and settings.
+- **Start a post.** Run ingest, view the reference, brainstorm ideas (with reshuffle), then
+  create a skeleton, which opens straight into the editor. This card collapses while you
+  write so the editor takes focus.
+- **Editor.** An always-open writing surface: start freestyle (it saves as a draft on the
+  first keystroke) or from a skeleton. It autosaves on idle, the body grows to fit its text,
+  a word meter tracks the 120 to 220 word target, and spell check is on. Attach several
+  photos or a video by drag-and-drop; each photo gets auto-generated alt text (Claude
+  vision) that you can edit, and media is checked against LinkedIn's size and length limits.
+- **Error check** (side panel). Runs the same reference check, with flags color-coded by
+  kind (factualness, grammar, formatting, length). Click a flag to jump to its excerpt in
+  the draft. Accept a suggested fix to apply it in place, override a flag you accept, or
+  trim an over-length post (that flag cannot be overridden and blocks queuing).
+- **Version history** (side panel). Every change is snapshotted. Compare any earlier version
+  side by side with the current draft (word-level diff highlighting), and restore it.
+- **Queue for publishing** (side panel). Pick a time, or leave it blank to auto-space one
+  interval after the queue, then Queue or Publish now. Over-length drafts are blocked from
+  both.
+- **Preview** opens the post at LinkedIn's width, with your real name and profile photo.
+- **Terminal** (collapsible) streams what the pipeline is doing (Claude calls, publishes,
+  and so on) as it happens.
+
+Everything the command line does is available here. The CLI still works and is what a
+scheduled job (nudge, publish) uses.
+
 ## Status
 
-This repo is being built up to the pipeline above. Be honest with yourself about what runs
-today versus what is still designed.
+Be honest about what runs today versus what is still only built.
 
 **Verified at runtime**
 
-- LinkedIn OAuth login (personal profile, `w_member_social` + OpenID Connect)
-- `list`, GitHub activity preview (`activity`), and the legacy one-shot `draft` flow
+- LinkedIn OAuth login and profile fetch (name and photo), personal profile,
+  `w_member_social` + OpenID Connect.
+- The web app end to end in the browser: ingest, brainstorm and reshuffle, skeleton, edit
+  with autosave, error check with accept-fix and override, version history compare and
+  restore, multi-photo upload with auto alt text, scheduling, the word-limit block, and the
+  live activity feed.
+- The CLI loads and runs (`list`, `activity`, and the rest).
 
-**Built and compiling, not yet end-to-end tested**
+**Not yet exercised against the live service**
 
-- Ingestion: an AI agent log synthesized from GitHub activity plus notes, merged into
-  `reference.md` for the since-last-post window (`ingest`)
-- Processing: multi-idea brainstorm with select/reshuffle, skeleton-with-gaps, and the
-  error-check loop (`brainstorm`, `select`, `reshuffle`, `skeleton`, `check`, `override`,
-  `preview`)
-- Deliverable: publish queue with the 15-minute edit lock, media attachment, scheduled
-  publish, and the weekly email nudge (`approve`, `schedule`, `queue`, `attach`, `publish`,
-  `nudge`)
-
-The full flow still needs an end-to-end runtime test on a machine with dependencies
-installed.
+- The actual publish to LinkedIn (it posts to your real feed, so it needs a deliberate live
+  post) and the video upload path, and the SMTP nudge email. These code paths are built and
+  unit-checked; watch the first real publish and nudge, and if LinkedIn returns an error the
+  message will say what to fix.
 
 ## Prerequisites
 
@@ -85,9 +120,10 @@ authorize once:
 This opens LinkedIn in your browser. After you approve, tokens are cached in `tokens.json`
 (gitignored).
 
-## Usage
+## Command line
 
-The full workflow, with a human at every judgment call:
+Prefer the web app above (`python blogger.py serve`). The same workflow runs from the
+command line, which is also what a scheduled job calls. A human is at every judgment call:
 
 ```bash
 python blogger.py ingest              # build reference.md from your logs + GitHub
@@ -102,12 +138,18 @@ python blogger.py queue               # see scheduled posts and lock state
 python blogger.py publish             # publish due queued posts (safe to schedule)
 ```
 
-`list`, `show <id>`, `override <id> <flag>`, `schedule <id> --at ...`, `retry <id>`, and
-`nudge` round out the commands. The legacy `draft` still does a one-shot draft from
-`activity_log.md` without the brainstorm flow.
+`serve`, `list`, `show <id>`, `override <id> <flag>`, `schedule <id> --at ...`, `retry <id>`,
+and `nudge` round out the commands. The legacy `draft` still does a one-shot draft from
+`activity_log.md` without the brainstorm flow. Drafts default to a queue-only publish; a
+draft over the word limit (default 220) cannot be approved or published from either
+front-end until trimmed.
 
 ## Notes and limits
 
+- **Scheduled posting.** A queued post goes live when something runs `publish` after its
+  time. Click Publish now for one post, or, for hands-off publishing, schedule `publish`
+  (and `nudge --prepare`) to run periodically via Task Scheduler. The nudge cadence and the
+  default post spacing both follow the single "post every N days" setting.
 - **Official API only.** No browser automation or scraping involved.
 - **Tokens expire.** Member access tokens last about 60 days. With member-token refresh
   enabled on the app, the tool refreshes automatically; otherwise run `login` again.

@@ -49,6 +49,49 @@ page the owner has. Three stages:
 - **Official LinkedIn API only**, never scraping or browser automation.
 - Secrets live in a **gitignored `.env`**. Drafting model: `claude-sonnet-5`.
 - Design principle: **nothing publishes without human approval.**
+- **One cadence setting.** `post_interval_days` (stored in `state.json`, default from
+  `POST_INTERVAL_DAYS`) drives both the default spacing between scheduled posts and the nudge
+  cadence, so the owner has a single "post every N days" control.
+- **Word limit.** A draft over `MAX_POST_WORDS` (default 220) cannot be queued or published
+  from either front-end until trimmed.
+
+## Web interface (local Flask app)
+
+`blogger.py serve` starts a Flask app bound to `127.0.0.1` (localhost only; nothing is
+exposed to the network), the main way the tool is used. The browser drives the same pipeline
+the CLI implements, over a JSON API in `web.py`; `webui/index.html` is a single
+self-contained page (no build step, no external assets). Drafts and state are the same files
+the CLI reads, so the two front-ends are interchangeable.
+
+Layout: a left sidebar (pipeline stepper, status chips, reference vintage and next-nudge
+countdown, the queue, settings), a main column (a collapsible "start a post" compose card,
+the always-open editor, and the drafts list), and a right work sidebar (error check, version
+history, queue for publishing, preview, and a collapsible terminal).
+
+Notable behaviors:
+
+- **Freestyle editor.** Always open. Typing creates a draft on first save
+  (`POST /api/drafts/new`); a new skeleton auto-opens into it. Debounced autosave; the body
+  grows to fit its content so a highlighted excerpt never hides in overflow.
+- **Media.** Several photos and one video per draft, stored as a JSON list on the draft's
+  front matter (`drafts.get_media`/`set_media`) under `drafts/uploads`. Each photo gets auto
+  alt text from Claude vision (`llm.describe_image`). `media.py` validates each file against
+  LinkedIn's documented size and length limits (video duration read from the MP4 `mvhd`
+  atom). A single post holds one image, several images, or one video, never a mix.
+- **Error check.** The same reference check as the CLI. Flags are color-coded by category and
+  clickable to select their excerpt in the editor; a suggested fix can be accepted to replace
+  the excerpt in place (`processing.apply_suggestion`). The over-length flag is computed
+  locally, shown the moment a draft opens, and cannot be overridden.
+- **Version history.** `versions.py` snapshots on create, edit (rapid edits coalesced),
+  check, override, accept, and restore, under `drafts/versions`. The UI lists them and offers
+  a word-level-diff compare and a restore.
+- **Terminal.** `web.py` keeps a small in-memory activity feed (per server run) at
+  `/api/activity`; the collapsible panel polls it and shows pipeline steps (Claude and
+  LinkedIn calls, publishes, and so on).
+- **Publish safety.** `queue.publish_draft` resolves media and checks the word limit before
+  writing `posting`, so a missing file or an over-length post leaves the draft `failed`
+  (editable, retryable) rather than stranded, and it never writes `posted` without a
+  confirmed URN.
 
 ## Design principles (HCI)
 
@@ -96,44 +139,50 @@ linkedin-blogger/
     auth.py                  LinkedIn OAuth (login, token refresh, member URN)
     linkedin.py              publish to the LinkedIn Posts API
     content.py               legacy one-shot draft from activity_log.md
-    processing.py            Stage B: brainstorm, skeleton, error-check loop
+    processing.py            Stage B: brainstorm, skeleton, error-check loop, accept-fix
     queue.py                 Stage C: scheduled queue, lock, reliable publish
-    nudge.py                 Stage C: weekly email reminder
-    state.py                 state.json helpers, incl. last_posted_at
+    nudge.py                 Stage C: email reminder (cadence = the post-interval setting)
+    state.py                 state.json helpers: last_posted_at, settings, brainstorm session
     github_activity.py       fetch commits + PRs for configured repos (Stage A step 1)
     agent_log.py             synthesize agent_log.md + merge reference.md (Stage A step 2)
+    llm.py                   shared Anthropic client (retries, thinking off, image alt text)
+    drafts.py                read/write draft files, media-list helpers, soft delete to trash
+    media.py                 media kind detection and LinkedIn size/length validation
+    versions.py              per-draft version snapshots for compare and restore
+    web.py                   local Flask app and JSON API behind the browser UI
+    webui/index.html         the single self-contained browser page (no build step)
   docs/                      privacy.html (Pages), pipeline.svg, this file
   activity_log.example.md    template; real activity_log.md is gitignored
 ```
 
 Data files (`.env`, `tokens.json`, `state.json`, `activity_log.md`, `agent_notes.md`,
-`agent_log.md`, `reference.md`, `drafts/`) stay at the repo root and are gitignored.
+`agent_log.md`, `reference.md`, `drafts/`) stay at the repo root and are gitignored. Under
+`drafts/`: the draft `.md` files and their `.check.json`, plus `uploads/` (attached media),
+`versions/` (snapshots), and `trash/` (soft-deleted drafts). Nothing secret is ever written
+to a tracked path.
 
 ## Build status
 
 **Verified at runtime**
 
-- LinkedIn OAuth `login`, `list`, GitHub activity preview (`activity`), and the legacy
-  one-shot `draft` / `approve` / `publish` text flow.
+- LinkedIn OAuth `login` and profile fetch (name and photo).
+- The web app end to end in a browser: ingest, brainstorm and reshuffle, skeleton, edit with
+  autosave, error check with accept-fix and override, version history compare and restore,
+  multi-photo upload with auto alt text, scheduling, the word-limit block, and the terminal
+  activity feed. The equivalent CLI commands load and run (`list`, `activity`, and the rest).
 
-**Built and compiling, not yet end-to-end tested**
+**Not yet exercised against the live service**
 
-- Stage A step 2: agent log synthesis + reference merge (`ingest`).
-- Stage B: `brainstorm`, `ideas`, `select`, `reshuffle`, `skeleton`, `check`, `override`,
-  `preview` (multi-idea, skeleton-with-gaps, error-check loop).
-- Stage C: `approve` / `schedule` / `queue` (15-minute lock), `attach` media, `publish`
-  (marks posted only on a confirmed URN, else failed, with unknown-outcome recorded safely),
-  `retry`, `nudge` email.
+- The real publish to LinkedIn (it posts to your live feed) and the video upload path, and
+  the SMTP nudge email. These are built and unit-checked; watch the first real publish and
+  nudge, and a returned error message will name what to fix.
 
 **Next up**
 
-- End-to-end runtime test of the full flow: ingest -> brainstorm -> select -> skeleton ->
-  check -> approve -> publish, on a machine with dependencies installed.
-- Wire the schedule (Task Scheduler): run `nudge --prepare` and `publish` daily. The nudge
-  self-gates on NUDGE_INTERVAL_DAYS since your last post (default 7), so a daily run only
-  emails when a post is actually due; `publish` only posts drafts whose scheduled time is
-  due.
-- Optional: video media.
+- Wire the schedule (Task Scheduler): run `nudge --prepare` and `publish` periodically. The
+  nudge self-gates on the post-interval setting (default 7 days) since your last post or
+  nudge, so a periodic run only emails when a post is actually due; `publish` only posts
+  drafts whose scheduled time has arrived.
 
 ## Prerequisites and secrets (in `.env`)
 
@@ -149,3 +198,7 @@ Data files (`.env`, `tokens.json`, `state.json`, `activity_log.md`, `agent_notes
 - Official API only, no scraping (protects the account).
 - Posts report only what is in the logs; no invented achievements.
 - Human approval gate is non-negotiable; the queue is editable until the 15-minute lock.
+- A draft over the word limit cannot be queued or published; publish fails safely (leaving
+  the draft `failed`, never stranded) on a missing media file or an over-length post.
+- Uploaded media and version snapshots live under gitignored `drafts/`; no secret is written
+  to a tracked path. The web server binds to localhost only.
