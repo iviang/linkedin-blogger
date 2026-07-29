@@ -171,7 +171,7 @@
 
   .etitle { width: 100%; font: inherit; font-size: 18px; font-weight: 650; letter-spacing: -.01em; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); margin-bottom: 15px; }
   .etitle:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
-  .epost { width: 100%; font: inherit; font-size: 14px; line-height: 1.6; padding: 13px 14px; border: 1px solid var(--line2); border-radius: 10px; background: var(--raise); color: var(--ink); resize: vertical; min-height: 230px; }
+  .epost { width: 100%; font: inherit; font-size: 14px; line-height: 1.6; padding: 13px 14px; border: 1px solid var(--line2); border-radius: 10px; background: var(--raise); color: var(--ink); resize: none; overflow-y: hidden; min-height: 200px; }
   .epost:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
   .spellrow { margin-top: 9px; }
   .spellpill { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
@@ -646,8 +646,38 @@
       });
     }
 
-    // Select the flagged excerpt in the editor body and scroll it into view. The body is a
-    // textarea, so we use the native text selection as the highlight.
+    // Grow the body textarea to fit its content so it never scrolls internally; the page
+    // scrolls instead, which keeps a highlighted excerpt from hiding in the box's overflow.
+    function autoGrow(ta) {
+      if (!ta) return;
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    }
+
+    // Page Y of the character at `idx`, measured with a hidden mirror that matches the
+    // textarea's font, width, and padding.
+    function excerptPageY(ta, idx) {
+      var cs = getComputedStyle(ta);
+      var padL = parseFloat(cs.paddingLeft), padR = parseFloat(cs.paddingRight);
+      var mirror = document.createElement("div");
+      mirror.style.cssText = "position:absolute;visibility:hidden;top:0;left:-9999px;white-space:pre-wrap;word-wrap:break-word;box-sizing:content-box;padding:0;border:0;margin:0;";
+      mirror.style.width = (ta.clientWidth - padL - padR) + "px";
+      ["fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight", "letterSpacing"].forEach(function (p) {
+        mirror.style[p] = cs[p];
+      });
+      mirror.textContent = ta.value.substring(0, idx);
+      var marker = document.createElement("span");
+      marker.textContent = "​";
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      var within = marker.offsetTop;
+      document.body.removeChild(mirror);
+      var rect = ta.getBoundingClientRect();
+      return rect.top + window.scrollY + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop) + within;
+    }
+
+    // Select the flagged excerpt in the editor body (native selection = highlight) and scroll
+    // the page so it sits mid-viewport.
     function highlightExcerpt(excerpt) {
       if (!excerpt) return;
       var ta = document.getElementById("ePost");
@@ -660,13 +690,11 @@
         if (idx === -1) { eNote("That excerpt is not in the current text (it changed since the check).", "warn"); return; }
         excerpt = probe;
       }
-      // Scroll the excerpt roughly to the middle: measure the height of the text before it.
-      ta.value = text.substring(0, idx);
-      var before = ta.scrollHeight;
-      ta.value = text;
-      ta.scrollTop = Math.max(0, before - ta.clientHeight / 2);
+      autoGrow(ta); // make sure it fits its content before we measure
       ta.focus();
       ta.setSelectionRange(idx, idx + excerpt.length);
+      var y = excerptPageY(ta, idx);
+      window.scrollTo({ top: Math.max(0, y - window.innerHeight / 2), behavior: "smooth" });
     }
 
     // Blank freestyle state: editor open, no draft yet.
@@ -676,6 +704,7 @@
       document.getElementById("eLock").hidden = true;
       document.getElementById("eTitle").value = ""; document.getElementById("eTitle").disabled = false;
       document.getElementById("ePost").value = ""; document.getElementById("ePost").readOnly = false;
+      autoGrow(document.getElementById("ePost"));
       document.getElementById("eSave").disabled = false;
       document.getElementById("eCheck").disabled = false;
       document.getElementById("eFlags").innerHTML = "";
@@ -710,6 +739,7 @@
       document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
       document.getElementById("eTitle").value = detail.title || "";
       document.getElementById("ePost").value = detail.body || "";
+      autoGrow(document.getElementById("ePost"));
       var lock = document.getElementById("eLock");
       var ro = !detail.editable;
       if (ro) { lock.textContent = detail.lock_reason || "This draft cannot be edited."; lock.hidden = false; }
@@ -818,7 +848,9 @@
     }
     document.getElementById("ePost").addEventListener("input", scheduleAutosave);
     document.getElementById("eTitle").addEventListener("input", scheduleAutosave);
+    document.getElementById("ePost").addEventListener("input", function () { autoGrow(this); });
     document.getElementById("ePost").addEventListener("focus", function () { setComposeCollapsed(true); });
+    window.addEventListener("resize", function () { autoGrow(document.getElementById("ePost")); });
 
     document.getElementById("eSave").addEventListener("click", async function () {
       this.disabled = true;
