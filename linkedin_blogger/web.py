@@ -13,7 +13,7 @@ from pathlib import Path
 from flask import Flask, request, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 
-from . import agent_log, auth, config, drafts, llm, media, processing, queue, state
+from . import agent_log, auth, config, drafts, llm, media, processing, queue, state, versions
 
 WEBUI_DIR = Path(__file__).resolve().parent / "webui"
 UPLOADS_DIR = config.DRAFTS_DIR / "uploads"  # under gitignored drafts/, so photos never get committed
@@ -176,6 +176,7 @@ def create_app() -> Flask:
             body,
             drafts.draft_path(draft_id),
         )
+        versions.record(draft_id, "created", "Skeleton created", idea.get("title", ""), body, "auto")
         return {"id": draft_id, "body": body}
 
     # --- Stage 3b: edit a draft, run its check, override flags ---
@@ -228,7 +229,9 @@ def create_app() -> Flask:
             "created": datetime.now().isoformat(timespec="seconds"),
             "idea_title": (data.get("title") or "").strip(),
         }
-        drafts.write_draft(meta, data.get("body") or "", drafts.draft_path(draft_id))
+        body = data.get("body") or ""
+        drafts.write_draft(meta, body, drafts.draft_path(draft_id))
+        versions.record(draft_id, "created", "Draft created", meta["idea_title"], body, "you")
         return _draft_detail(draft_id)
 
     @app.get("/api/drafts/<draft_id>")
@@ -254,6 +257,7 @@ def create_app() -> Flask:
             meta["idea_title"] = (data.get("title") or "").strip()
         # A body edit invalidates any prior check; check_is_stale surfaces that until re-run.
         drafts.write_draft(meta, new_body, path)
+        versions.record(draft_id, "edit", "Edited draft", meta.get("idea_title", ""), new_body, "you")
         return _draft_detail(draft_id)
 
     @app.post("/api/drafts/<draft_id>/check")
@@ -271,6 +275,9 @@ def create_app() -> Flask:
         if result["passed"] and meta.get("status") == "skeleton":
             meta["status"] = "pending"
             drafts.write_draft(meta, body, path)
+        open_flags = len([f for f in result.get("flags", []) if not f.get("overridden")])
+        label = "Error check passed" if result["passed"] else f"Error check: {open_flags} open flag(s)"
+        versions.record(draft_id, "check", label, meta.get("idea_title", ""), body, "auto")
         return _draft_detail(draft_id)
 
     @app.post("/api/drafts/<draft_id>/override")
@@ -281,12 +288,46 @@ def create_app() -> Flask:
         if not flag_id:
             return {"error": "Missing flag_id."}, 400
         check = processing.apply_override(draft_id, flag_id, data.get("reason") or "")
-        if check.get("passed"):
-            path = drafts.draft_path(draft_id)
-            meta, body = drafts.read_draft(path)
-            if meta.get("status") == "skeleton":
-                meta["status"] = "pending"
-                drafts.write_draft(meta, body, path)
+        path = drafts.draft_path(draft_id)
+        meta, body = drafts.read_draft(path)
+        if check.get("passed") and meta.get("status") == "skeleton":
+            meta["status"] = "pending"
+            drafts.write_draft(meta, body, path)
+        versions.record(draft_id, "override", f"Overrode {flag_id}", meta.get("idea_title", ""), body, "you")
+        return _draft_detail(draft_id)
+
+    @app.get("/api/drafts/<draft_id>/versions")
+    def api_versions(draft_id):
+        return {"versions": versions.summaries(draft_id)}
+
+    @app.get("/api/drafts/<draft_id>/versions/<int:index>")
+    def api_version_get(draft_id, index):
+        version = versions.get(draft_id, index)
+        if version is None:
+            return {"error": "No such version."}, 404
+        return {
+            "title": version.get("title", ""),
+            "body": version.get("body", ""),
+            "label": version["label"],
+            "at": version["at"],
+            "who": version["who"],
+        }
+
+    @app.post("/api/drafts/<draft_id>/versions/<int:index>/restore")
+    @guarded
+    def api_version_restore(draft_id, index):
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, _body = drafts.read_draft(path)
+        queue.assert_editable(meta)
+        version = versions.get(draft_id, index)
+        if version is None:
+            return {"error": "No such version."}, 404
+        meta["idea_title"] = version.get("title", "")
+        drafts.write_draft(meta, version.get("body", ""), path)
+        versions.record(draft_id, "restore", "Restored an earlier version",
+                        version.get("title", ""), version.get("body", ""), "you")
         return _draft_detail(draft_id)
 
     @app.delete("/api/drafts/<draft_id>")

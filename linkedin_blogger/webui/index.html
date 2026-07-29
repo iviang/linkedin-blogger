@@ -128,15 +128,43 @@
 
   .ref { margin: 12px 0 0; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; background: var(--raise); max-height: 340px; overflow: auto; }
 
-  /* editor: two columns (main + error-check side) */
-  .editgrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; padding: 18px 20px; }
-  @media (max-width: 1080px) { .editgrid { grid-template-columns: 1fr; } }
-  .editmain { min-width: 0; }
-  .editside { border: 1px solid var(--line); border-radius: 11px; background: var(--raise); padding: 14px 16px; align-self: start; }
-  .side-h2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-  .side-h2 h3 { font-size: 14px; margin: 0; }
-  .gate { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+  /* editor + work sidebar (error check, version history) */
+  .workrow { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
+  @media (max-width: 1080px) { .workrow { grid-template-columns: 1fr; } }
+  .worksidebar { min-width: 0; }
+  .ebody { padding: 18px 20px; }
+  .pbody { padding: 14px 16px; }
+  .gate { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; }
   .gate .eyebrow { display: block; margin-bottom: 10px; }
+
+  /* version history */
+  .vitem { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .vitem:last-child { border-bottom: 0; }
+  .vmain { min-width: 0; }
+  .vlabel { font-size: 12.5px; font-weight: 600; }
+  .vtime { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+  .vtag { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+  .vtag.you { background: var(--ok-bg); color: var(--ok-ink); }
+  .vtag.auto { background: var(--navy-soft); color: var(--navy); }
+  .vtag.cur { background: var(--ok); color: #06110C; }
+  .vact { display: flex; gap: 6px; flex: none; }
+  .mini { font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .mini:hover { border-color: var(--navy); }
+
+  /* compare overlay */
+  .cmp-overlay { position: fixed; inset: 0; background: rgba(9,13,17,.55); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 60; }
+  .cmp-overlay[hidden] { display: none; }
+  .cmp { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; width: min(1000px, 100%); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; }
+  .cmp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .cmp-head h3 { margin: 0; font-size: 15px; }
+  .cmp-head p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+  .cmp-cols { display: grid; grid-template-columns: 1fr 1fr; overflow: auto; }
+  .cmp-col { padding: 14px 18px; }
+  .cmp-col + .cmp-col { border-left: 1px solid var(--line); }
+  .cmp-h { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
+  .cmp-text { font: inherit; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+  .cmp-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--raise); }
+  @media (max-width: 720px) { .cmp-cols { grid-template-columns: 1fr; } .cmp-col + .cmp-col { border-left: 0; border-top: 1px solid var(--line); } }
 
   .etitle { width: 100%; font: inherit; font-size: 18px; font-weight: 650; letter-spacing: -.01em; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); margin-bottom: 15px; }
   .etitle:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
@@ -244,16 +272,16 @@
         </div>
       </section>
 
-      <section class="panel" id="editorPanel">
-        <div class="phead">
-          <h2>Editor</h2>
-          <div class="phead-r">
-            <span class="estatus" id="eId">New post</span>
-            <button class="btn" id="newDraftBtn">New</button>
+      <div class="workrow">
+        <section class="panel" id="editorPanel">
+          <div class="phead">
+            <h2>Editor</h2>
+            <div class="phead-r">
+              <span class="estatus" id="eId">New post</span>
+              <button class="btn" id="newDraftBtn">New</button>
+            </div>
           </div>
-        </div>
-        <div class="editgrid">
-          <div class="editmain">
+          <div class="ebody">
             <div class="lock" id="eLock" hidden></div>
             <label class="elabel" for="eTitle">Title</label>
             <input class="etitle" id="eTitle" type="text" placeholder="Give the post a title">
@@ -282,12 +310,6 @@
               <div class="pv-imgs" id="pvImgs"></div>
               <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
             </div>
-          </div>
-
-          <aside class="editside">
-            <div class="side-h2"><h3>Error check</h3><button class="btn primary" id="eCheck">Run check</button></div>
-            <span class="note" id="eNote"></span>
-            <div class="flags" id="eFlags"></div>
 
             <div class="gate">
               <span class="eyebrow">Queue for publishing</span>
@@ -302,14 +324,42 @@
               <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
               <div class="eactions"><button class="btn danger" id="eDelete">Delete draft</button></div>
             </div>
-          </aside>
+          </div>
+        </section>
+
+        <div class="worksidebar">
+          <section class="panel" id="checkPanel">
+            <div class="phead"><h2>Error check</h2><button class="btn primary" id="eCheck">Run check</button></div>
+            <div class="pbody">
+              <span class="note" id="eNote"></span>
+              <div class="flags" id="eFlags"></div>
+            </div>
+          </section>
+          <section class="panel" id="versionPanel">
+            <div class="phead"><h2>Version history</h2></div>
+            <div class="pbody" id="versions"><p class="empty">Save the draft to start its history.</p></div>
+          </section>
         </div>
-      </section>
+      </div>
 
       <section class="panel" id="draftsPanel">
         <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
         <div class="list" id="drafts"><p class="empty">Loading&hellip;</p></div>
       </section>
+    </div>
+  </div>
+
+  <div class="cmp-overlay" id="cmpOverlay" hidden>
+    <div class="cmp" role="dialog" aria-modal="true" aria-label="Compare versions">
+      <div class="cmp-head">
+        <div><h3>Compare versions</h3><p id="cmpSub"></p></div>
+        <button class="btn" id="cmpClose">Close</button>
+      </div>
+      <div class="cmp-cols">
+        <div class="cmp-col"><div class="cmp-h">This earlier version</div><pre class="cmp-text" id="cmpOld"></pre></div>
+        <div class="cmp-col"><div class="cmp-h">Current draft</div><pre class="cmp-text" id="cmpNew"></pre></div>
+      </div>
+      <div class="cmp-foot"><button class="btn danger" id="cmpRestore">Restore this version</button></div>
     </div>
   </div>
 
@@ -604,6 +654,7 @@
       document.getElementById("ePublish").disabled = true;
       eSchedNote("Start typing to save the draft, then you can schedule it."); ePubNote("");
       document.getElementById("ePreview").hidden = true; document.getElementById("ePreviewBtn").textContent = "Show preview";
+      loadVersions(null);
     }
 
     // After a freestyle draft is first saved, adopt its id without disturbing the text.
@@ -614,6 +665,7 @@
       document.getElementById("eDelete").disabled = false;
       document.getElementById("ePublish").disabled = false;
       eSchedNote("Not scheduled. Leave the time empty to auto-space it after the queue.");
+      loadVersions(detail.id);
     }
 
     function fillEditor(detail) {
@@ -664,6 +716,8 @@
 
       document.getElementById("ePreview").hidden = true;
       document.getElementById("ePreviewBtn").textContent = "Show preview";
+
+      loadVersions(detail.id);
     }
 
     async function openEditor(id) {
@@ -724,6 +778,7 @@
         await saveDraft();
         eNote("Saved. Re-run check if you changed the wording.", "ok");
         load();
+        loadVersions(currentDraftId);
       } catch (e) { eNote(e.message, "warn"); }
     }
     document.getElementById("ePost").addEventListener("input", scheduleAutosave);
@@ -999,6 +1054,63 @@
         else { ePubNote(r.error || "Publish failed.", "warn"); }
         load();
       } catch (e) { ePubNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    // Version history: list, compare side by side, restore.
+    async function loadVersions(id) {
+      var box = document.getElementById("versions");
+      if (!id) { box.innerHTML = '<p class="empty">Save the draft to start its history.</p>'; return; }
+      try {
+        var r = await getJSON("/api/drafts/" + encodeURIComponent(id) + "/versions");
+        var vs = r.versions || [];
+        if (!vs.length) { box.innerHTML = '<p class="empty">No versions yet.</p>'; return; }
+        box.innerHTML = vs.slice().reverse().map(function (v, ri) {
+          var isCurrent = ri === 0;
+          var who = v.who === "auto" ? "auto" : "you";
+          var actions = isCurrent
+            ? '<span class="vtag cur">current</span>'
+            : '<button class="mini" data-view="' + v.index + '">View</button>' +
+              '<button class="mini" data-restore="' + v.index + '">Restore</button>';
+          return '<div class="vitem"><div class="vmain"><div class="vlabel">' + esc(v.label) +
+            ' <span class="vtag ' + who + '">' + who + '</span></div><div class="vtime">' +
+            new Date(v.at).toLocaleString() + '</div></div><div class="vact">' + actions + "</div></div>";
+        }).join("");
+        Array.prototype.forEach.call(box.querySelectorAll("[data-view]"), function (b) {
+          b.addEventListener("click", function () { openCompare(id, parseInt(this.dataset.view, 10)); });
+        });
+        Array.prototype.forEach.call(box.querySelectorAll("[data-restore]"), function (b) {
+          b.addEventListener("click", function () { restoreVersion(id, parseInt(this.dataset.restore, 10)); });
+        });
+      } catch (e) { box.innerHTML = '<p class="empty">Could not load history.</p>'; }
+    }
+
+    async function openCompare(id, index) {
+      try {
+        var v = await getJSON("/api/drafts/" + encodeURIComponent(id) + "/versions/" + index);
+        if (v.error) throw new Error(v.error);
+        document.getElementById("cmpSub").textContent = v.label + " · " + new Date(v.at).toLocaleString();
+        document.getElementById("cmpOld").textContent = (v.title ? v.title + "\n\n" : "") + v.body;
+        var curTitle = document.getElementById("eTitle").value;
+        document.getElementById("cmpNew").textContent = (curTitle ? curTitle + "\n\n" : "") + document.getElementById("ePost").value;
+        document.getElementById("cmpRestore").onclick = function () { restoreVersion(id, index); };
+        document.getElementById("cmpOverlay").hidden = false;
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function restoreVersion(id, index) {
+      if (!window.confirm("Restore this earlier version? Your current text is replaced (the current state stays in history).")) return;
+      try {
+        var detail = await postJSON("/api/drafts/" + encodeURIComponent(id) + "/versions/" + index + "/restore", {});
+        document.getElementById("cmpOverlay").hidden = true;
+        fillEditor(detail);
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    document.getElementById("cmpClose").addEventListener("click", function () { document.getElementById("cmpOverlay").hidden = true; });
+    document.getElementById("cmpOverlay").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !document.getElementById("cmpOverlay").hidden) document.getElementById("cmpOverlay").hidden = true;
     });
 
     // Clicking a draft or queue item loads it into the editor.
