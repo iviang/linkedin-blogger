@@ -27,12 +27,12 @@ def build_message(prepared: bool) -> EmailMessage:
 
     if prepared:
         intro = (
-            "It has been about a week since your last post. Your reference material was just "
+            "It has been a while since your last post. Your reference material was just "
             "refreshed from your logs and GitHub activity, so you can skip step 1 and start at "
             "brainstorm."
         )
     else:
-        intro = "It has been about a week since your last post. Time to write the next one."
+        intro = "It has been a while since your last post. Time to write the next one."
 
     body = f"""{intro}
 
@@ -64,7 +64,8 @@ def next_due() -> datetime | None:
     anchor = _anchor()
     if anchor is None:
         return None  # nothing posted or nudged yet: due now
-    return anchor + timedelta(days=config.NUDGE_INTERVAL_DAYS)
+    # Tracks the owner's posting cadence (the N-days setting), so changing it moves the nudge.
+    return anchor + timedelta(days=state.get_post_interval_days())
 
 
 def is_due(now: datetime | None = None) -> bool:
@@ -76,9 +77,9 @@ def is_due(now: datetime | None = None) -> bool:
 def send_nudge(prepare: bool = False, force: bool = False) -> None:
     """Email the nudge if it is due (or forced). Optionally refresh reference.md first.
 
-    Due means at least NUDGE_INTERVAL_DAYS have passed since your last post or last nudge,
-    so the reminder tracks your posting cadence rather than a fixed calendar day. Schedule
-    this to run daily; it stays quiet until a post is actually due.
+    Due means at least your posting interval (the N-days setting) has passed since your last
+    post or last nudge, so the reminder tracks your posting cadence rather than a fixed
+    calendar day. Schedule this to run daily; it stays quiet until a post is actually due.
     """
     now = datetime.now(timezone.utc)
     if not force and not is_due(now):

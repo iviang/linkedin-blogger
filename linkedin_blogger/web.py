@@ -71,11 +71,12 @@ def create_app() -> Flask:
             mtime = config.REFERENCE_FILE.stat().st_mtime
             reference_generated = datetime.fromtimestamp(mtime, timezone.utc).isoformat()
 
-        # Days until the next weekly nudge, measured from the most recent post or nudge.
+        # Days until the next nudge, measured from the most recent post or nudge, using the
+        # owner's posting interval so it moves when they change the N-days setting.
         next_nudge_days = None
         anchors = [t for t in (state.get_last_posted_at(), state.get_last_nudged_at()) if t]
         if anchors:
-            due = max(anchors) + timedelta(days=config.NUDGE_INTERVAL_DAYS)
+            due = max(anchors) + timedelta(days=state.get_post_interval_days())
             days = (due - datetime.now(timezone.utc)).total_seconds() / 86400
             next_nudge_days = max(0, int(math.ceil(days)))
 

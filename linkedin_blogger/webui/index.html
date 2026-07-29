@@ -277,7 +277,7 @@
 
       <div class="side-sec">
         <div class="side-h"><span class="eyebrow">Settings</span></div>
-        <label class="elabel" for="freq">Post every N days by default</label>
+        <label class="elabel" for="freq">Post every N days (spacing &amp; nudge)</label>
         <div class="eactions" style="margin-top: 6px;">
           <input class="etime" id="freq" type="number" min="1" max="365" style="width: 64px;">
           <button class="btn" id="freqSave">Save</button>
@@ -613,7 +613,8 @@
       try {
         var s = await postJSON("/api/settings", { post_interval_days: parseInt(val, 10) });
         document.getElementById("freq").value = s.post_interval_days;
-        freqNote("Saved. New posts default to " + s.post_interval_days + " days apart.", "ok");
+        freqNote("Saved. Posts and nudges now use " + s.post_interval_days + " days.", "ok");
+        load(); // refresh the sidebar so Next nudge reflects the new interval
       } catch (e) { freqNote(e.message, "warn"); }
     });
 
