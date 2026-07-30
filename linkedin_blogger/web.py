@@ -60,6 +60,18 @@ def guarded(view):
     return wrapper
 
 
+def _next_nudge_days() -> int | None:
+    """Days until the next nudge, measured from the most recent post or nudge using the owner's
+    posting interval, so it moves the moment they change the N-days setting. None before any post
+    or nudge. Shared by the status and settings endpoints so both report the same figure."""
+    anchors = [t for t in (state.get_last_posted_at(), state.get_last_nudged_at()) if t]
+    if not anchors:
+        return None
+    due = max(anchors) + timedelta(days=state.get_post_interval_days())
+    days = (due - datetime.now(timezone.utc)).total_seconds() / 86400
+    return max(0, int(math.ceil(days)))
+
+
 def create_app() -> Flask:
     app = Flask(__name__, static_folder=None)
 
@@ -83,20 +95,11 @@ def create_app() -> Flask:
             mtime = config.REFERENCE_FILE.stat().st_mtime
             reference_generated = datetime.fromtimestamp(mtime, timezone.utc).isoformat()
 
-        # Days until the next nudge, measured from the most recent post or nudge, using the
-        # owner's posting interval so it moves when they change the N-days setting.
-        next_nudge_days = None
-        anchors = [t for t in (state.get_last_posted_at(), state.get_last_nudged_at()) if t]
-        if anchors:
-            due = max(anchors) + timedelta(days=state.get_post_interval_days())
-            days = (due - datetime.now(timezone.utc)).total_seconds() / 86400
-            next_nudge_days = max(0, int(math.ceil(days)))
-
         return {
             "last_posted_at": last.isoformat() if last else None,
             "reference_exists": config.REFERENCE_FILE.exists(),
             "reference_generated": reference_generated,
-            "next_nudge_days": next_nudge_days,
+            "next_nudge_days": _next_nudge_days(),
             "repos": config.GITHUB_REPOS,
             "draft_count": len(in_drafts),
             "queued_count": len(queued),
@@ -511,7 +514,8 @@ def create_app() -> Flask:
         if days < 1 or days > 365:
             return {"error": "Posting frequency must be between 1 and 365 days."}, 400
         state.set_post_interval_days(days)
-        return {"post_interval_days": days}
+        # Return the recomputed nudge so the UI can update it instantly, without a second call.
+        return {"post_interval_days": days, "next_nudge_days": _next_nudge_days()}
 
     # --- Stage 3c: media, and publishing ---
 

@@ -497,13 +497,25 @@
       rationale: "Invites engagement and frames ongoing work as a story." },
   ];
 
+  // Common misspellings the demo's error check catches, so spelling is flagged like the real
+  // Claude check would. wrong -> right; matched case-insensitively on whole words.
+  var MISSPELLINGS = {
+    alot: "a lot", recieve: "receive", teh: "the", seperate: "separate", definately: "definitely",
+    occured: "occurred", wich: "which", thier: "their", becuase: "because", untill: "until",
+    wierd: "weird", accross: "across", tommorow: "tomorrow", calender: "calendar",
+    publically: "publicly", neccessary: "necessary", enviroment: "environment",
+    existance: "existence", maintainance: "maintenance", priviledge: "privilege",
+    refered: "referred", succesful: "successful", beleive: "believe", acheive: "achieve",
+    goverment: "government", occassion: "occasion", persistant: "persistent",
+  };
+
   // Seeded skeleton carries a couple of intentional issues (a lowercase 'i', a bare percentage)
   // plus the [YOUR VOICE] gaps, so the very first error check has real, clickable findings.
   var SKELETON =
     "I just shipped a small thing, and honestly i think it taught me more than the code did.\n\n" +
     "[YOUR VOICE: what was the feature, in one plain sentence?]\n\n" +
     "The interesting part was the moment it clicked: [YOUR VOICE: the insight].\n\n" +
-    "It felt like a 100% improvement in how I work, even though the change was tiny.\n\n" +
+    "It felt like a 100% improvement, and it was definately worth it even though the change was tiny.\n\n" +
     "[YOUR VOICE: one honest takeaway a reader could use themselves.]\n\n" +
     "What small change taught you something out of proportion to its size?";
 
@@ -585,6 +597,12 @@
       return isoOffset(new Date(base + intervalMs));
     }
 
+    function nextNudge() {
+      if (!store.lastPostedAt) return null;
+      var due = new Date(store.lastPostedAt).getTime() + store.settings.post_interval_days * 86400000;
+      return Math.max(0, Math.ceil((due - nowDate().getTime()) / 86400000));
+    }
+
     function recordVersion(d, label, who) {
       d.versions.push({ label: label, at: new Date().toISOString(), who: who, title: d.idea_title || "", body: d.body });
     }
@@ -619,8 +637,19 @@
       if (lc) add("grammar", "Lowercase 'i' should be capitalized.", lc, lc.replace(/^i\b/, "I"));
       var dup = first(/\b(\w+)\s+\1\b/i);         // repeated word
       if (dup) add("grammar", "Repeated word.", dup, dup.split(/\s+/)[0]);
-      var alot = first(/\balot\b/i);
-      if (alot) add("grammar", "'alot' is not a word.", alot, "a lot");
+
+      // Spelling: scan the body for common misspellings (up to 4) with real, in-text excerpts.
+      var spelled = 0;
+      Object.keys(MISSPELLINGS).forEach(function (wrong) {
+        if (spelled >= 4) return;
+        var m = body.match(new RegExp("\\b" + wrong + "\\b", "i"));
+        if (!m) return;
+        var found = m[0];
+        var right = MISSPELLINGS[wrong];
+        if (/^[A-Z]/.test(found)) right = right.charAt(0).toUpperCase() + right.slice(1);
+        add("grammar", "Possible spelling error: \"" + found + "\" looks misspelled.", found, right);
+        spelled += 1;
+      });
 
       // Formatting (house style)
       var caps = first(/\b[A-Z]{4,}\b/);
@@ -725,13 +754,8 @@
           var items = listDrafts();
           var inDrafts = items.filter(function (x) { return !QUEUE[x.status] && !DONE[x.status]; });
           var queued = items.filter(function (x) { return QUEUE[x.status]; });
-          var nextNudge = null;
-          if (store.lastPostedAt) {
-            var due = new Date(store.lastPostedAt).getTime() + store.settings.post_interval_days * 86400000;
-            nextNudge = Math.max(0, Math.ceil((due - nowDate().getTime()) / 86400000));
-          }
           return J({ last_posted_at: store.lastPostedAt, reference_exists: true,
-            reference_generated: store.referenceGeneratedAt, next_nudge_days: nextNudge,
+            reference_generated: store.referenceGeneratedAt, next_nudge_days: nextNudge(),
             repos: ["iviang/linkedin-blogger (demo)"], draft_count: inDrafts.length, queued_count: queued.length });
         }
         if (path === "/api/drafts" && method === "GET")
@@ -750,7 +774,7 @@
           if (isNaN(days)) return J({ error: "Enter a whole number of days." }, 400);
           if (days < 1 || days > 365) return J({ error: "Posting frequency must be between 1 and 365 days." }, 400);
           store.settings.post_interval_days = days;
-          return J({ post_interval_days: days });
+          return J({ post_interval_days: days, next_nudge_days: nextNudge() });
         }
 
         if (path === "/api/ingest" && method === "POST") {
@@ -759,7 +783,17 @@
           return J({ ok: true, since: store.lastPostedAt, reference_chars: store.reference.length });
         }
         if (path === "/api/brainstorm" && method === "POST") {
-          var set = body.reshuffle ? shuffled(IDEAS) : IDEAS.slice();
+          // Show 3 of the 6 at a time. Reshuffle rotates to the ones not shown last, then fills,
+          // so repeated reshuffles cycle through the whole pool rather than repeating a set.
+          var prev = (store.session.ideas || []).map(function (i) { return i.title; });
+          var set;
+          if (body.reshuffle) {
+            var fresh = shuffled(IDEAS.filter(function (i) { return prev.indexOf(i.title) === -1; }));
+            var rest = shuffled(IDEAS.filter(function (i) { return prev.indexOf(i.title) !== -1; }));
+            set = fresh.concat(rest).slice(0, 3);
+          } else {
+            set = shuffled(IDEAS).slice(0, 3);
+          }
           store.session = { ideas: set, selected_index: null, comments: "" };
           log("brainstorm: " + (body.reshuffle ? "reshuffled" : "proposed") + " " + set.length + " ideas (demo)");
           return J({ ideas: store.session.ideas, selected_index: null });
@@ -1022,6 +1056,12 @@ window.__DEMO_MOCK__.installMock();
       }).join("");
     }
 
+    function nudgeText(days) {
+      if (days == null) return "after first post";
+      if (days === 0) return "due now";
+      return "in ~" + days + (days === 1 ? " day" : " days");
+    }
+
     async function load() {
       try {
         var s = await getJSON("/api/status");
@@ -1035,9 +1075,7 @@ window.__DEMO_MOCK__.installMock();
         document.getElementById("draftCount").textContent = s.draft_count + " total";
         document.getElementById("queueCount").textContent = s.queued_count + " scheduled";
         document.getElementById("metaRef").textContent = s.reference_generated ? relDate(s.reference_generated) : "none yet";
-        document.getElementById("metaNudge").textContent = s.next_nudge_days == null
-          ? "after first post"
-          : (s.next_nudge_days === 0 ? "due now" : "in ~" + s.next_nudge_days + (s.next_nudge_days === 1 ? " day" : " days"));
+        document.getElementById("metaNudge").textContent = nudgeText(s.next_nudge_days);
 
         var d = await getJSON("/api/drafts");
         renderList("drafts", d.drafts, "No drafts yet. Brainstorm above, or just write in the editor.");
@@ -1161,8 +1199,11 @@ window.__DEMO_MOCK__.installMock();
       try {
         var s = await postJSON("/api/settings", { post_interval_days: parseInt(val, 10) });
         document.getElementById("freq").value = s.post_interval_days;
+        // Update Next nudge straight from the save response so it changes instantly, then
+        // refresh the rest of the sidebar.
+        if ("next_nudge_days" in s) document.getElementById("metaNudge").textContent = nudgeText(s.next_nudge_days);
         freqNote("Saved. Posts and nudges now use " + s.post_interval_days + " days.", "ok");
-        load(); // refresh the sidebar so Next nudge reflects the new interval
+        await load();
       } catch (e) { freqNote(e.message, "warn"); }
     });
 
@@ -1258,27 +1299,35 @@ window.__DEMO_MOCK__.installMock();
         var ovr = f.overridden;
         var hasEx = !!f.excerpt;
         var hasSug = !!f.suggestion;
+        var isLength = f.category === "length";
         var status = f.accepted ? '<span class="note ok">accepted</span>'
           : ovr ? '<span class="note ok">overridden</span>'
+          // The word limit cannot be overridden, but an over-length draft can be trimmed.
+          : isLength ? '<button class="btn" data-trim="1">Suggest a trim</button>'
           : f.noOverride ? ""
           : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>';
         var sug = (hasSug && !ovr)
           ? '<div class="flag-sug"><div class="flag-sug-h">Suggested fix</div><div class="flag-sug-t">' +
             esc(f.suggestion) + '</div><button class="btn primary" data-accept="' + esc(f.id) + '">Accept fix</button></div>'
           : "";
+        // Slot where a requested trim suggestion is shown, then applied.
+        var trimSlot = isLength ? '<div class="flag-sug" data-trim-slot hidden></div>' : "";
         var catClass = f.category ? " cat-" + esc(f.category) : "";
         return '<div class="flag' + catClass + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
           (hasEx ? ' data-excerpt="' + esc(f.excerpt) + '" title="Click to find this in the draft"' : "") +
           '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" + status +
           '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
           (hasEx ? '<div class="flag-ex">' + esc(f.excerpt) + "</div><div class=\"flag-hint\">Click to highlight in the draft</div>" : "") +
-          sug + "</div>";
+          sug + trimSlot + "</div>";
       }).join("");
       Array.prototype.forEach.call(flags.querySelectorAll("button[data-flag]"), function (btn) {
         btn.addEventListener("click", function (e) { e.stopPropagation(); overrideFlag(this.getAttribute("data-flag")); });
       });
       Array.prototype.forEach.call(flags.querySelectorAll("button[data-accept]"), function (btn) {
         btn.addEventListener("click", function (e) { e.stopPropagation(); acceptFlag(this.getAttribute("data-accept")); });
+      });
+      Array.prototype.forEach.call(flags.querySelectorAll("button[data-trim]"), function (btn) {
+        btn.addEventListener("click", function (e) { e.stopPropagation(); suggestTrim(btn); });
       });
       Array.prototype.forEach.call(flags.querySelectorAll(".flag.has-ex"), function (fl) {
         fl.addEventListener("click", function () { highlightExcerpt(this.getAttribute("data-excerpt")); });
@@ -1574,6 +1623,46 @@ window.__DEMO_MOCK__.installMock();
           { flag_id: flagId }));
         load();
         eNote("Fix applied.", "ok");
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    // Length has no override; instead offer a Claude-suggested trim that cuts redundancy and
+    // filler while keeping the meaning, then let the owner apply it in one click.
+    async function suggestTrim(btn) {
+      var flagEl = btn.closest(".flag");
+      var slot = flagEl ? flagEl.querySelector("[data-trim-slot]") : null;
+      var prev = btn.textContent;
+      btn.disabled = true; btn.textContent = "Trimming…";
+      if (slot) { slot.hidden = false; slot.innerHTML = '<div class="flag-sug-h">Suggested trim</div><span class="note busy">Asking Claude to tighten this…</span>'; }
+      try {
+        // Trim what is on screen: flush any pending edit and create the draft first if freestyle.
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        await saveDraft();
+        var r = await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/trim", {});
+        if (slot) {
+          slot.innerHTML =
+            '<div class="flag-sug-h">Suggested trim (' + r.original_words + ' &rarr; ' + r.words + ' words)</div>' +
+            '<div class="flag-sug-t" style="white-space: pre-wrap;">' + esc(r.suggestion) + '</div>' +
+            '<button class="btn primary" data-usetrim>Use this trim</button>';
+          slot.querySelector("[data-usetrim]").addEventListener("click", function () { applyTrim(r.suggestion); });
+        }
+      } catch (e) {
+        if (slot) slot.innerHTML = '<span class="note warn">' + esc(e.message) + '</span>';
+        else eNote(e.message, "warn");
+      } finally {
+        btn.disabled = false; btn.textContent = prev;
+      }
+    }
+
+    async function applyTrim(text) {
+      var ta = document.getElementById("ePost");
+      ta.value = text; autoGrow(ta); updateWordCount();
+      eNote("Applying trim…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        fillEditor(await saveDraft());
+        load();
+        eNote("Trim applied. Re-run the check to confirm it is clean.", "ok");
       } catch (e) { eNote(e.message, "warn"); }
     }
 

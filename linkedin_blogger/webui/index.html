@@ -492,6 +492,12 @@
       }).join("");
     }
 
+    function nudgeText(days) {
+      if (days == null) return "after first post";
+      if (days === 0) return "due now";
+      return "in ~" + days + (days === 1 ? " day" : " days");
+    }
+
     async function load() {
       try {
         var s = await getJSON("/api/status");
@@ -505,9 +511,7 @@
         document.getElementById("draftCount").textContent = s.draft_count + " total";
         document.getElementById("queueCount").textContent = s.queued_count + " scheduled";
         document.getElementById("metaRef").textContent = s.reference_generated ? relDate(s.reference_generated) : "none yet";
-        document.getElementById("metaNudge").textContent = s.next_nudge_days == null
-          ? "after first post"
-          : (s.next_nudge_days === 0 ? "due now" : "in ~" + s.next_nudge_days + (s.next_nudge_days === 1 ? " day" : " days"));
+        document.getElementById("metaNudge").textContent = nudgeText(s.next_nudge_days);
 
         var d = await getJSON("/api/drafts");
         renderList("drafts", d.drafts, "No drafts yet. Brainstorm above, or just write in the editor.");
@@ -631,8 +635,11 @@
       try {
         var s = await postJSON("/api/settings", { post_interval_days: parseInt(val, 10) });
         document.getElementById("freq").value = s.post_interval_days;
+        // Update Next nudge straight from the save response so it changes instantly, then
+        // refresh the rest of the sidebar.
+        if ("next_nudge_days" in s) document.getElementById("metaNudge").textContent = nudgeText(s.next_nudge_days);
         freqNote("Saved. Posts and nudges now use " + s.post_interval_days + " days.", "ok");
-        load(); // refresh the sidebar so Next nudge reflects the new interval
+        await load();
       } catch (e) { freqNote(e.message, "warn"); }
     });
 
