@@ -86,8 +86,44 @@ excerpt, or omit"}]}
 grammar, formatting, factualness, length."""
 
 
+_TRIM_SYSTEM = """You tighten an over-length LinkedIn post so it fits the word limit, without \
+changing what it says.
+
+Rules:
+- Preserve the meaning, every fact, and the author's first-person voice. Do not add any new \
+claim, metric, example, name, or fact that is not already in the draft. Trimming only removes \
+and condenses, it never invents.
+- Cut redundancy and filler: ideas stated twice, hedges and qualifiers that add nothing (for \
+example "really", "just", "actually", "I think", "in order to"), wordy phrasings, and \
+sentences that restate a point already made. Merge sentences where it reads naturally.
+- Keep the opening hook and the closing line or question. Keep any hashtags at the end.
+- Plain language a hiring manager would respect. No em dashes; use commas, colons, or \
+parentheses. Straight quotes only. No emoji.
+- Return only the trimmed post text. No preamble, no explanation, no quotes around it."""
+
+
 def _ask(system: str, user: str, max_tokens: int = 2048) -> str:
     return llm.ask(system, user, max_tokens)
+
+
+def suggest_trim(body: str, max_words: int) -> str:
+    """Return a shorter rewrite of an over-length draft, at or under max_words. Cuts redundancy
+    and filler while keeping the facts and voice; never adds new claims. Retries once, harder,
+    if the first pass is still over the limit."""
+
+    def _attempt(extra: str = "") -> str:
+        user = (
+            f"Word limit: {max_words} words.\n\n"
+            f"Draft to trim:\n\n{body}\n\n"
+            f"Rewrite it to at most {max_words} words, ideally between 120 and {max_words}. "
+            f"{extra}Return only the trimmed post."
+        )
+        return _ask(_TRIM_SYSTEM, user, max_tokens=1024)
+
+    trimmed = _attempt()
+    if len(trimmed.split()) > max_words:
+        trimmed = _attempt(f"Your previous attempt was still over {max_words} words. Cut harder. ")
+    return trimmed.strip()
 
 
 def _parse_json(text: str):

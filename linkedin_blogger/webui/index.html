@@ -728,27 +728,35 @@
         var ovr = f.overridden;
         var hasEx = !!f.excerpt;
         var hasSug = !!f.suggestion;
+        var isLength = f.category === "length";
         var status = f.accepted ? '<span class="note ok">accepted</span>'
           : ovr ? '<span class="note ok">overridden</span>'
+          // The word limit cannot be overridden, but an over-length draft can be trimmed.
+          : isLength ? '<button class="btn" data-trim="1">Suggest a trim</button>'
           : f.noOverride ? ""
           : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>';
         var sug = (hasSug && !ovr)
           ? '<div class="flag-sug"><div class="flag-sug-h">Suggested fix</div><div class="flag-sug-t">' +
             esc(f.suggestion) + '</div><button class="btn primary" data-accept="' + esc(f.id) + '">Accept fix</button></div>'
           : "";
+        // Slot where a requested trim suggestion is shown, then applied.
+        var trimSlot = isLength ? '<div class="flag-sug" data-trim-slot hidden></div>' : "";
         var catClass = f.category ? " cat-" + esc(f.category) : "";
         return '<div class="flag' + catClass + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
           (hasEx ? ' data-excerpt="' + esc(f.excerpt) + '" title="Click to find this in the draft"' : "") +
           '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" + status +
           '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
           (hasEx ? '<div class="flag-ex">' + esc(f.excerpt) + "</div><div class=\"flag-hint\">Click to highlight in the draft</div>" : "") +
-          sug + "</div>";
+          sug + trimSlot + "</div>";
       }).join("");
       Array.prototype.forEach.call(flags.querySelectorAll("button[data-flag]"), function (btn) {
         btn.addEventListener("click", function (e) { e.stopPropagation(); overrideFlag(this.getAttribute("data-flag")); });
       });
       Array.prototype.forEach.call(flags.querySelectorAll("button[data-accept]"), function (btn) {
         btn.addEventListener("click", function (e) { e.stopPropagation(); acceptFlag(this.getAttribute("data-accept")); });
+      });
+      Array.prototype.forEach.call(flags.querySelectorAll("button[data-trim]"), function (btn) {
+        btn.addEventListener("click", function (e) { e.stopPropagation(); suggestTrim(btn); });
       });
       Array.prototype.forEach.call(flags.querySelectorAll(".flag.has-ex"), function (fl) {
         fl.addEventListener("click", function () { highlightExcerpt(this.getAttribute("data-excerpt")); });
@@ -1044,6 +1052,46 @@
           { flag_id: flagId }));
         load();
         eNote("Fix applied.", "ok");
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    // Length has no override; instead offer a Claude-suggested trim that cuts redundancy and
+    // filler while keeping the meaning, then let the owner apply it in one click.
+    async function suggestTrim(btn) {
+      var flagEl = btn.closest(".flag");
+      var slot = flagEl ? flagEl.querySelector("[data-trim-slot]") : null;
+      var prev = btn.textContent;
+      btn.disabled = true; btn.textContent = "Trimming…";
+      if (slot) { slot.hidden = false; slot.innerHTML = '<div class="flag-sug-h">Suggested trim</div><span class="note busy">Asking Claude to tighten this…</span>'; }
+      try {
+        // Trim what is on screen: flush any pending edit and create the draft first if freestyle.
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        await saveDraft();
+        var r = await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/trim", {});
+        if (slot) {
+          slot.innerHTML =
+            '<div class="flag-sug-h">Suggested trim (' + r.original_words + ' &rarr; ' + r.words + ' words)</div>' +
+            '<div class="flag-sug-t" style="white-space: pre-wrap;">' + esc(r.suggestion) + '</div>' +
+            '<button class="btn primary" data-usetrim>Use this trim</button>';
+          slot.querySelector("[data-usetrim]").addEventListener("click", function () { applyTrim(r.suggestion); });
+        }
+      } catch (e) {
+        if (slot) slot.innerHTML = '<span class="note warn">' + esc(e.message) + '</span>';
+        else eNote(e.message, "warn");
+      } finally {
+        btn.disabled = false; btn.textContent = prev;
+      }
+    }
+
+    async function applyTrim(text) {
+      var ta = document.getElementById("ePost");
+      ta.value = text; autoGrow(ta); updateWordCount();
+      eNote("Applying trim…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        fillEditor(await saveDraft());
+        load();
+        eNote("Trim applied. Re-run the check to confirm it is clean.", "ok");
       } catch (e) { eNote(e.message, "warn"); }
     }
 

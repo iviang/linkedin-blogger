@@ -362,6 +362,27 @@ def create_app() -> Flask:
         _log(f"accept: applied suggested fix for {flag_id} on {draft_id}")
         return _draft_detail(draft_id)
 
+    @app.post("/api/drafts/<draft_id>/trim")
+    @guarded
+    def api_draft_trim(draft_id):
+        """Suggest a shorter rewrite for an over-length draft. Returns the trimmed text and its
+        word count; the caller decides whether to apply it. Only offered when the draft is over
+        the limit, since trimming a draft already within the limit would just risk its meaning."""
+        path = drafts.draft_path(draft_id)
+        if not path.exists():
+            return {"error": "No draft with that id."}, 404
+        meta, body = drafts.read_draft(path)
+        if meta.get("status") in ("posted", "posting"):
+            return {"error": "That draft is already posted."}, 400
+        words = len(body.split())
+        if words <= config.MAX_POST_WORDS:
+            return {"error": f"Draft is {words} words, within the {config.MAX_POST_WORDS}-word limit. No trim needed."}, 400
+        _log(f"trim: asking Claude to tighten {draft_id} under {config.MAX_POST_WORDS} words")
+        suggestion = processing.suggest_trim(body, config.MAX_POST_WORDS)
+        new_words = len(suggestion.split())
+        _log(f"trim: suggested {words} -> {new_words} words for {draft_id}")
+        return {"suggestion": suggestion, "words": new_words, "original_words": words}
+
     @app.get("/api/drafts/<draft_id>/versions")
     def api_versions(draft_id):
         return {"versions": versions.summaries(draft_id)}

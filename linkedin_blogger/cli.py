@@ -419,6 +419,30 @@ def cmd_attach(args):
     print(f"Attached {rel} to {args.id} ({len(media)} photo(s) total)")
 
 
+def cmd_trim(args):
+    path = _find_draft(args.id)
+    meta, body = _read_draft(path)
+    if meta.get("status") in ("posted", "posting"):
+        raise SystemExit("That draft is already posted.")
+    words = len(body.split())
+    if words <= config.MAX_POST_WORDS:
+        raise SystemExit(f"Draft is {words} words, within the {config.MAX_POST_WORDS}-word limit. No trim needed.")
+
+    suggestion = processing.suggest_trim(body, config.MAX_POST_WORDS)
+    new_words = len(suggestion.split())
+
+    if args.apply:
+        _write_draft(meta, suggestion, path)
+        print(f"Trimmed {args.id} from {words} to {new_words} words and saved.")
+        print(f"The draft changed, so re-run the check before queuing: python blogger.py check {args.id}")
+    else:
+        print(f"Suggested trim ({words} -> {new_words} words):\n")
+        print("-" * 60)
+        print(suggestion)
+        print("-" * 60)
+        print(f"Apply it with: python blogger.py trim {args.id} --apply")
+
+
 def cmd_retry(args):
     path = _find_draft(args.id)
     meta, body = _read_draft(path)
@@ -549,6 +573,11 @@ def main(argv=None):
     attach.add_argument("path", help="Image path relative to repo root, or absolute.")
     attach.add_argument("--alt", default="", help="Alt text for accessibility.")
     attach.set_defaults(func=cmd_attach)
+
+    trim = sub.add_parser("trim", help="Suggest a shorter rewrite for an over-length draft.")
+    trim.add_argument("id")
+    trim.add_argument("--apply", action="store_true", help="Save the trimmed rewrite over the draft.")
+    trim.set_defaults(func=cmd_trim)
 
     retry = sub.add_parser("retry", help="Reset a failed draft back to queued.")
     retry.add_argument("id")
