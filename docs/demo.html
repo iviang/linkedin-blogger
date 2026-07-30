@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<!--
+  LinkedIn Blogger, demo build. Fully self-contained: no server, no network, no secrets.
+  Every /api/* call is answered in-browser by an inlined mock, so nothing is ever posted to
+  LinkedIn and no AI is called. Refreshing the page resets all state.
+
+  Embed it on a site with an iframe (works from any path or origin, including file://):
+    <iframe src="demo.html" title="LinkedIn Blogger demo" loading="lazy"
+            style="width:100%; height:900px; border:0; border-radius:12px"></iframe>
+  Hosted via GitHub Pages it is:
+    https://iviang.github.io/linkedin-blogger/demo.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkedIn Blogger (demo)</title>
+<style>
+  :root { --bg:#F4F6F7; --surface:#fff; --raise:#FBFCFD; --ink:#19212A; --muted:#586069; --faint:#899098;
+          --line:#E4E7EA; --line2:#D5DADE; --navy:#16324F; --navy-soft:#E7EEF4;
+          --ok:#1D9E75; --ok-bg:#E6F5EF; --ok-ink:#0F6E56; --warn:#C77D2E; --warn-bg:#FBEFE0; --warn-ink:#8A531A;
+          --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+          --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; --r: 12px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161A; --surface:#1A2027; --raise:#20272F; --ink:#E8EBEE; --muted:#A3ABB3; --faint:#6F777F;
+            --line:#2A313A; --line2:#343C45; --navy:#8FB8DC; --navy-soft:#1E2B39;
+            --ok:#46C79C; --ok-bg:#123528; --ok-ink:#7FE0BF; --warn:#E0A45E; --warn-bg:#3A2A17; --warn-ink:#F0C48D; }
+  }
+  :root { --cat-fact: #C0392B; --cat-grammar: #2D6CB6; --cat-format: #B4720F; --cat-length: #6B5FA8;
+          --cat-fact-bg: #F7E4E1; --st-queued-bg: #ECEAF7; }
+  @media (prefers-color-scheme: dark) { :root { --cat-fact: #E8897F; --cat-grammar: #7FB2E8; --cat-format: #E0A45E; --cat-length: #B3A6E0;
+          --cat-fact-bg: #3A1C18; --st-queued-bg: #221E33; } }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; color-scheme: light dark; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  .app { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; max-width: 1180px;
+         margin: 0 auto; padding: 22px 20px 60px; align-items: start; }
+  @media (max-width: 960px) { .app { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 16px; overflow: hidden; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+
+  /* sidebar */
+  .sidebar { padding: 18px 16px; position: sticky; top: 22px; margin-bottom: 0; }
+  @media (max-width: 960px) { .sidebar { position: static; } }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .tile { width: 36px; height: 36px; border-radius: 9px; background: var(--navy); color: #F5F3EC; font-weight: 700; font-size: 14px; display: grid; place-items: center; flex: none; }
+  .brand h1 { font-size: 15px; margin: 0; line-height: 1.15; }
+  .brand .sub { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
+
+  .stepper { list-style: none; margin: 0 0 18px; padding: 0; position: relative; }
+  .stepper::before { content: ""; position: absolute; left: 14px; top: 14px; bottom: 14px; width: 2px; background: var(--line2); }
+  .step { position: relative; display: flex; gap: 12px; align-items: center; padding: 7px 0; cursor: pointer; }
+  .step:hover .step-label { color: var(--ink); }
+  .step .dot { width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 2px solid var(--line2);
+               display: grid; place-items: center; font-size: 12px; color: var(--faint); font-weight: 600; z-index: 1; flex: none; }
+  .step.active .dot { background: var(--navy); border-color: var(--navy); color: #F5F3EC; }
+  .step-label { font-size: 13.5px; color: var(--muted); }
+  .step.active .step-label { color: var(--ink); font-weight: 600; }
+
+  .chips { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .chip { font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line2); color: var(--muted); text-align: center; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
+  .chip.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: transparent; }
+
+  .side-meta { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; display: grid; gap: 10px; }
+  .metrow { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; }
+  .mk { color: var(--muted); }
+  .mv { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+  .side-sec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; }
+  .side-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .qlist { display: flex; flex-direction: column; gap: 2px; }
+  .qitem { padding: 8px 9px; border-radius: 8px; cursor: pointer; }
+  .qitem:hover { background: var(--raise); }
+  .qi-t { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+  .qi-m { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 3px; }
+  .sidenote { font-size: 11.5px; color: var(--faint); margin: 16px 2px 0; line-height: 1.5; }
+  .sidenote code, .sidenote .kbd { font-family: var(--mono); background: var(--navy-soft); color: var(--navy); padding: 1px 5px; border-radius: 5px; }
+
+  /* stage panels */
+  .phead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .phead h2 { font-size: 14px; margin: 0; }
+  .phead-r { display: flex; align-items: center; gap: 10px; }
+  .estatus { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .compose { padding: 20px 22px; }
+  .compose-head { cursor: pointer; }
+  .compose-head .eyebrow { display: block; margin-bottom: 6px; }
+  .compose-head h2 { font-size: 21px; margin: 0; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+  .caret { font-size: 13px; color: var(--faint); }
+  .compose-body { margin-top: 14px; }
+  .compose.collapsed .compose-body { display: none; }
+  .compose .lead { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 60ch; }
+  .count { font-size: 12px; color: var(--faint); font-family: var(--mono); }
+  .count.busy { color: var(--navy); }
+  .count.err { color: var(--warn-ink); }
+  .list { padding: 6px 18px 14px; }
+  .empty { color: var(--muted); font-size: 13.5px; padding: 10px 0; margin: 0; }
+
+  .row { display: flex; gap: 14px; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row[data-id] { cursor: pointer; border-radius: 8px; padding-left: 8px; padding-right: 8px; margin: 0 -8px; }
+  .row[data-id]:hover { background: var(--raise); }
+  .row-main { min-width: 0; }
+  .row-t { font-size: 14px; font-weight: 650; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .row-p { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .row-meta { text-align: right; flex: none; }
+  .row-id { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+  .row-sched { font-size: 11.5px; color: var(--navy); margin-top: 3px; }
+  .st { font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--faint); }
+  .st.skeleton { background: var(--line); color: var(--faint); }
+  .st.pending { background: var(--navy-soft); color: var(--navy); }
+  .st.queued, .st.approved { background: var(--st-queued-bg); color: var(--cat-length); }
+  .st.posted { background: var(--ok-bg); color: var(--ok-ink); }
+  .st.failed { background: var(--warn-bg); color: var(--warn-ink); }
+  .mark { font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--cat-fact-bg); color: var(--cat-fact); }
+
+  .btn { font: inherit; font-size: 13px; font-weight: 600; border-radius: 9px; padding: 7px 13px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--navy); }
+  .btn.primary { background: var(--navy); color: #F5F3EC; border-color: var(--navy); }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.danger { border-color: var(--warn-ink); color: var(--warn-ink); }
+  .btn.danger:hover { background: var(--warn-bg); }
+  .btn:disabled, .btn:disabled:hover { opacity: .5; cursor: default; border-color: var(--line2); filter: none; }
+
+  .flow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ideas { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .idea { display: flex; gap: 11px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--surface); }
+  .idea:hover { border-color: var(--navy); }
+  .idea.sel { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-bg); }
+  .idea input { margin-top: 3px; flex: none; accent-color: var(--ok); }
+  .idea-t { font-size: 14.5px; font-weight: 650; display: block; }
+  .idea-a { font-size: 13px; color: var(--ink); margin-top: 4px; display: block; line-height: 1.5; }
+  .idea-r { font-size: 12.5px; color: var(--muted); margin-top: 5px; display: block; }
+  .dirlabel { display: block; font-size: 12px; color: var(--muted); margin: 16px 0 5px; }
+  .dir { width: 100%; font: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); resize: vertical; }
+  #skeletonStep { margin-top: 8px; }
+  #skeletonBtn { margin-top: 12px; }
+
+  .elabel { display: block; font-size: 12px; color: var(--muted); margin: 0 0 5px; }
+  .etime { font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); }
+  .note { font-size: 12.5px; color: var(--muted); }
+  .note.busy { color: var(--navy); }
+  .note.warn { color: var(--warn-ink); }
+  .note.ok { color: var(--ok-ink); }
+  .eactions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .grow { flex: 1 1 140px; }
+
+  .ref { margin: 12px 0 0; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; background: var(--raise); max-height: 340px; overflow: auto; }
+
+  /* editor + work sidebar (error check, version history) */
+  .workrow { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
+  @media (max-width: 1080px) { .workrow { grid-template-columns: 1fr; } }
+  .workmain { min-width: 0; }
+  .worksidebar { min-width: 0; }
+
+  .composebar { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+  .wordcount { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .wordcount.under { color: var(--warn-ink); }
+  .wordcount.over { color: var(--cat-fact); }
+  .meter { width: 130px; height: 6px; border-radius: 999px; background: var(--line2); overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .15s ease; }
+  .meter i.under { background: var(--warn); }
+  .meter i.over { background: var(--cat-fact); }
+  .ebody { padding: 18px 20px; }
+  .pbody { padding: 14px 16px; }
+
+  .term-head { cursor: pointer; }
+  .term-head h2 { display: flex; align-items: center; gap: 8px; }
+  #terminalPanel.collapsed .term-body { display: none; }
+  .term { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; color: #C7D0D9; background: #12161A; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .term > div { padding: 1px 0; }
+  .term-ts { color: #6F777F; margin-right: 8px; }
+  .term .empty { color: #6F777F; }
+
+  /* version history */
+  .vitem { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .vitem:last-child { border-bottom: 0; }
+  .vmain { min-width: 0; }
+  .vlabel { font-size: 12.5px; font-weight: 600; }
+  .vtime { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+  .vtag { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+  .vtag.you { background: var(--ok-bg); color: var(--ok-ink); }
+  .vtag.auto { background: var(--navy-soft); color: var(--navy); }
+  .vtag.cur { background: var(--ok); color: #06110C; }
+  .vact { display: flex; gap: 6px; flex: none; }
+  .mini { font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .mini:hover { border-color: var(--navy); }
+
+  /* compare overlay */
+  .cmp-overlay { position: fixed; inset: 0; background: rgba(9,13,17,.55); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 60; }
+  .cmp-overlay[hidden] { display: none; }
+  .cmp { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; width: min(1000px, 100%); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; }
+  .cmp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .cmp-head h3 { margin: 0; font-size: 15px; }
+  .cmp-head p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+  .cmp-cols { display: grid; grid-template-columns: 1fr 1fr; overflow: auto; }
+  .cmp-col { padding: 14px 18px; }
+  .cmp-col + .cmp-col { border-left: 1px solid var(--line); }
+  .cmp-h { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
+  .cmp-text { font: inherit; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+  .del { background: #FBE4E1; color: #8A2B21; text-decoration: line-through; border-radius: 4px; padding: 0 2px; }
+  .ins { background: var(--ok-bg); color: var(--ok-ink); border-radius: 4px; padding: 0 2px; }
+  @media (prefers-color-scheme: dark) { .del { background: #3A1C18; color: #F0B3AA; } }
+  .cmp-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--raise); }
+  @media (max-width: 720px) { .cmp-cols { grid-template-columns: 1fr; } .cmp-col + .cmp-col { border-left: 0; border-top: 1px solid var(--line); } }
+
+  .etitle { width: 100%; font: inherit; font-size: 18px; font-weight: 650; letter-spacing: -.01em; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 9px; background: var(--raise); color: var(--ink); margin-bottom: 15px; }
+  .etitle:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
+  .epost { width: 100%; font: inherit; font-size: 14px; line-height: 1.6; padding: 13px 14px; border: 1px solid var(--line2); border-radius: 10px; background: var(--raise); color: var(--ink); resize: none; overflow-y: hidden; min-height: 200px; }
+  .epost:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
+  .spellrow { margin-top: 9px; }
+  .spellpill { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
+  .spellpill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .lock { font-size: 12.5px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 9px; padding: 9px 12px; margin-bottom: 14px; }
+
+  .flags { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+  .flag { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: var(--surface); }
+  .flag.cat-factualness, .flag.cat-discrepancy { border-left-color: var(--cat-fact); }
+  .flag.cat-grammar { border-left-color: var(--cat-grammar); }
+  .flag.cat-formatting { border-left-color: var(--cat-format); }
+  .flag.cat-length { border-left-color: var(--cat-length); }
+  .flag.cat-factualness .flag-cat, .flag.cat-discrepancy .flag-cat { color: var(--cat-fact); }
+  .flag.cat-grammar .flag-cat { color: var(--cat-grammar); }
+  .flag.cat-formatting .flag-cat { color: var(--cat-format); }
+  .flag.cat-length .flag-cat { color: var(--cat-length); }
+  .flag.ovr { border-left-color: var(--ok); opacity: .85; }
+  .flag.has-ex { cursor: pointer; }
+  .flag.has-ex:hover { border-color: var(--navy); border-left-color: var(--navy); }
+  .flag-hint { font-size: 11px; color: var(--navy); margin-top: 6px; }
+  .flag-sug { margin-top: 10px; border-top: 1px dashed var(--line2); padding-top: 9px; }
+  .flag-sug-h { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--ok-ink); margin-bottom: 5px; }
+  .flag-sug-t { font-size: 12.5px; color: var(--ink); background: var(--ok-bg); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
+  .flag-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .flag-cat { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn-ink); }
+  .flag-msg { font-size: 13px; margin-top: 6px; line-height: 1.45; }
+  .flag-ex { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 6px; background: var(--raise); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+
+  .media { margin-top: 18px; }
+  .drop { border: 1.5px dashed var(--line2); border-radius: 10px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; background: var(--raise); }
+  .drop:hover, .drop.over { border-color: var(--navy); color: var(--navy); background: var(--navy-soft); }
+  .gallery { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .gitem { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line2); border-radius: 10px; padding: 10px; }
+  .gitem img, .gitem video { width: 92px; height: 92px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line2); flex: none; background: #000; }
+  .gcol { flex: 1; min-width: 0; }
+  .gwarn { color: var(--warn-ink); font-size: 12px; margin-top: 6px; }
+  .mwarn { color: var(--warn-ink); background: var(--warn-bg); border-radius: 9px; padding: 9px 12px; font-size: 12.5px; margin-top: 10px; }
+  .alt { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line2); border-radius: 8px; background: var(--raise); color: var(--ink); }
+
+  .pv { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .pv-head { display: flex; gap: 11px; align-items: center; padding: 13px 15px; }
+  .pv-av { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); color: #F5F3EC; display: grid; place-items: center; font-weight: 700; font-size: 15px; flex: none; overflow: hidden; }
+  .pv-av img { width: 100%; height: 100%; object-fit: cover; }
+  .pv-name { font-size: 14px; font-weight: 650; }
+  .pv-sub { font-size: 11.5px; color: var(--faint); }
+  .pv-text { padding: 2px 15px 13px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+  .pv-imgs { display: grid; grid-template-columns: 1fr; gap: 2px; border-top: 1px solid var(--line); }
+  .pv-imgs.two { grid-template-columns: 1fr 1fr; }
+  .pv-imgs img, .pv-imgs video { width: 100%; display: block; }
+  .pv-actions { display: flex; justify-content: space-around; padding: 9px 0; border-top: 1px solid var(--line); color: var(--faint); font-size: 12.5px; font-weight: 600; }
+</style>
+<style>
+  /* Demo build: media upload and AI vision are turned off (no server, no API keys). */
+  .media { display: none !important; }
+  .demo-badge { font: 600 9px/1 var(--mono); letter-spacing: .09em; background: var(--warn-bg);
+                color: var(--warn-ink); padding: 2px 6px; border-radius: 5px; vertical-align: middle;
+                margin-left: 6px; }
+  .demo-note { border-color: var(--warn-ink) !important; }
+</style>
+</head>
+<body>
+  <h2 class="sr-only">LinkedIn Blogger. A left sidebar has the pipeline stepper, status, the publish queue, and
+    settings. The main area has a collapsible compose card and an always-open editor with an error-check side panel,
+    media, a LinkedIn-style preview, scheduling, and publish.</h2>
+
+  <div class="app">
+    <aside class="panel sidebar">
+      <div class="brand">
+        <div class="tile">VN</div>
+        <div><h1>LinkedIn Blogger <span class="demo-badge">DEMO</span></h1><p class="sub">sandbox &middot; nothing is posted</p></div>
+      </div>
+
+      <ol class="stepper" id="stepper">
+        <li class="step" data-scroll="newPost"><span class="dot">1</span><span class="step-label">Ingest notes</span></li>
+        <li class="step" data-scroll="newPost"><span class="dot">2</span><span class="step-label">Brainstorm ideas</span></li>
+        <li class="step" data-scroll="editorPanel"><span class="dot">3</span><span class="step-label">Write draft</span></li>
+        <li class="step" data-scroll="editorPanel"><span class="dot">4</span><span class="step-label">Error check</span></li>
+        <li class="step" data-scroll="editorPanel"><span class="dot">5</span><span class="step-label">Queue &amp; publish</span></li>
+      </ol>
+
+      <div class="chips" id="chips"><span class="chip">loading&hellip;</span></div>
+
+      <div class="side-meta">
+        <div class="metrow"><span class="mk">Reference</span><span class="mv" id="metaRef">&mdash;</span></div>
+        <div class="metrow"><span class="mk">Next nudge</span><span class="mv" id="metaNudge">&mdash;</span></div>
+      </div>
+
+      <div class="side-sec">
+        <div class="side-h"><span class="eyebrow">In queue</span><span class="count" id="queueCount"></span></div>
+        <div class="qlist" id="queue"><p class="empty">Loading&hellip;</p></div>
+      </div>
+
+      <div class="side-sec">
+        <div class="side-h"><span class="eyebrow">Settings</span></div>
+        <label class="elabel" for="freq">Post every N days (spacing &amp; nudge)</label>
+        <div class="eactions" style="margin-top: 6px;">
+          <input class="etime" id="freq" type="number" min="1" max="365" style="width: 64px;">
+          <button class="btn" id="freqSave">Save</button>
+        </div>
+        <span class="note" id="freqNote" style="display: block; margin-top: 7px;"></span>
+      </div>
+
+      <p class="sidenote demo-note">This is a live demo. Everything runs in your browser: no login, no AI calls, and nothing is ever sent to LinkedIn. Refresh the page to reset it.</p>
+    </aside>
+
+    <div class="stage">
+      <section class="panel compose" id="newPost">
+        <div class="compose-head" id="composeHead">
+          <span class="eyebrow">Stages 1&ndash;2 &middot; Ingest &amp; brainstorm</span>
+          <h2>Start a post <span class="caret" id="composeCaret">&#9662;</span></h2>
+        </div>
+        <div class="compose-body" id="composeBody">
+          <p class="lead">Pull your activity since the last post into a reference, brainstorm angles from it, then write a skeleton to fill in your own voice. Or just start writing in the editor below.</p>
+          <div class="flow">
+            <button class="btn" id="ingestBtn">1 &middot; Run ingest</button>
+            <button class="btn" id="refBtn">View reference</button>
+            <button class="btn" id="brainstormBtn">2 &middot; Brainstorm ideas</button>
+            <button class="btn" id="reshuffleBtn" hidden>Reshuffle</button>
+            <span class="count grow" id="flowMsg"></span>
+          </div>
+          <pre class="ref" id="reference" hidden></pre>
+          <div class="ideas" id="ideas"></div>
+          <div id="skeletonStep" hidden>
+            <label class="dirlabel" for="direction">Direction for the draft (optional)</label>
+            <textarea class="dir" id="direction" rows="2" placeholder="Any angle, emphasis, or tone to steer the skeleton"></textarea>
+            <button class="btn primary" id="skeletonBtn" disabled>3 &middot; Create skeleton draft</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="workrow">
+        <div class="workmain">
+        <section class="panel" id="editorPanel">
+          <div class="phead">
+            <h2>Editor</h2>
+            <div class="phead-r">
+              <span class="estatus" id="eId">New post</span>
+              <button class="btn" id="newDraftBtn">New</button>
+            </div>
+          </div>
+          <div class="ebody">
+            <div class="lock" id="eLock" hidden></div>
+            <label class="elabel" for="eTitle">Title</label>
+            <input class="etitle" id="eTitle" type="text" placeholder="Give the post a title">
+            <label class="elabel" for="ePost">Post body</label>
+            <textarea class="epost" id="ePost" spellcheck="true" placeholder="Start writing. Your post saves automatically as a draft."></textarea>
+            <div class="composebar">
+              <span class="wordcount" id="wordCount">0 / 220 words</span>
+              <span class="meter"><i id="wordMeter"></i></span>
+              <span style="flex: 1;"></span>
+              <span class="spellpill">Spell check on</span>
+            </div>
+
+            <div class="media">
+              <label class="elabel">Photos or video (optional)</label>
+              <div class="drop" id="eDrop">Drag media here, or click to choose. Photos (JPG, PNG, GIF) or a video (MP4).</div>
+              <input type="file" id="eFile" accept="image/png,image/jpeg,image/gif,video/mp4,video/quicktime" multiple hidden>
+              <div class="mwarn" id="eMediaWarn" hidden></div>
+              <div class="gallery" id="eGallery"></div>
+            </div>
+
+            <div class="eactions">
+              <button class="btn primary" id="eSave">Save</button>
+              <button class="btn danger" id="eDelete" style="margin-left: auto;">Delete draft</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="draftsPanel">
+          <div class="phead"><h2>Drafts</h2><span class="count" id="draftCount"></span></div>
+          <div class="list" id="drafts"><p class="empty">Loading&hellip;</p></div>
+        </section>
+        </div>
+
+        <div class="worksidebar">
+          <section class="panel" id="checkPanel">
+            <div class="phead"><h2>Error check</h2><button class="btn primary" id="eCheck">Run check</button></div>
+            <div class="pbody">
+              <span class="note" id="eNote"></span>
+              <div class="flags" id="eFlags"></div>
+            </div>
+          </section>
+          <section class="panel" id="versionPanel">
+            <div class="phead"><h2>Version history</h2></div>
+            <div class="pbody" id="versions"><p class="empty">Save the draft to start its history.</p></div>
+          </section>
+          <section class="panel" id="queuePubPanel">
+            <div class="phead"><h2>Queue for publishing</h2></div>
+            <div class="pbody">
+              <label class="elabel" for="eWhen">Schedule</label>
+              <input class="etime" id="eWhen" type="datetime-local" style="width: 100%;">
+              <span class="note warn" id="gateWarn" hidden style="display: block; margin: 8px 0 0;">Over the 220-word limit. Trim the draft to queue or publish.</span>
+              <div class="eactions">
+                <button class="btn primary" id="eSchedule">Queue</button>
+                <button class="btn" id="ePublish">Publish now</button>
+                <button class="btn danger" id="eUnqueue" hidden>Remove from queue</button>
+              </div>
+              <span class="note" id="eSchedNote" style="display: block; margin-top: 9px;"></span>
+              <span class="note" id="ePubNote" style="display: block; margin-top: 6px;"></span>
+            </div>
+          </section>
+          <section class="panel" id="previewPanel">
+            <div class="phead"><h2>Preview</h2><button class="btn" id="ePreviewBtn">Show preview</button></div>
+            <div class="pbody"><p class="empty" style="margin: 0;">Opens the post at LinkedIn's width, with your name and photo.</p></div>
+          </section>
+          <section class="panel" id="terminalPanel">
+            <div class="phead term-head" id="termHead">
+              <h2>Terminal <span class="caret" id="termCaret">&#9662;</span></h2>
+              <span class="count" id="termCount"></span>
+            </div>
+            <div class="term-body">
+              <pre class="term" id="termOut"><div class="empty">Pipeline activity shows here.</div></pre>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cmp-overlay" id="pvOverlay" hidden>
+    <div class="cmp" style="width: min(580px, 100%);" role="dialog" aria-modal="true" aria-label="Post preview">
+      <div class="cmp-head">
+        <div><h3>Post preview</h3><p>As it will appear on your LinkedIn feed</p></div>
+        <button class="btn" id="pvClose">Close</button>
+      </div>
+      <div style="padding: 16px 18px; overflow: auto;">
+        <div class="pv" id="ePreview">
+          <div class="pv-head">
+            <div class="pv-av" id="pvAv">VN</div>
+            <div><div class="pv-name" id="pvName">You</div><div class="pv-sub">now &middot; LinkedIn</div></div>
+          </div>
+          <div class="pv-text" id="pvText"></div>
+          <div class="pv-imgs" id="pvImgs"></div>
+          <div class="pv-actions"><span>Like</span><span>Comment</span><span>Repost</span><span>Send</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cmp-overlay" id="cmpOverlay" hidden>
+    <div class="cmp" role="dialog" aria-modal="true" aria-label="Compare versions">
+      <div class="cmp-head">
+        <div><h3>Compare versions</h3><p id="cmpSub"></p></div>
+        <button class="btn" id="cmpClose">Close</button>
+      </div>
+      <div class="cmp-cols">
+        <div class="cmp-col"><div class="cmp-h">This earlier version</div><pre class="cmp-text" id="cmpOld"></pre></div>
+        <div class="cmp-col"><div class="cmp-h">Current draft</div><pre class="cmp-text" id="cmpNew"></pre></div>
+      </div>
+      <div class="cmp-foot"><button class="btn danger" id="cmpRestore">Restore this version</button></div>
+    </div>
+  </div>
+
+  <!-- Demo mock backend: intercepts every /api/* call in-browser. No network, no secrets. -->
+  <script>
+// Demo mock backend for the LinkedIn Blogger UI. No network, no secrets, nothing is posted.
+// It intercepts window.fetch and answers every /api/* call the UI makes from in-memory state,
+// so the whole page can be dropped onto a website as a sandbox. Refreshing resets everything.
+//
+// This file is authored so it can be unit-tested in Node (it exports createMock) and also
+// inlined verbatim into demo.html, where installMock() overrides window.fetch.
+(function (root) {
+  var QUEUE_LOCK_MINUTES = 15;
+  var SAME_DAY_MIN_LEAD_MINUTES = 30;
+  var MAX_WORDS = 220;
+
+  function createMock() {
+    var store = {
+      profile: { name: "Jordan Lee", picture: null },
+      settings: { post_interval_days: 7 },
+      reference:
+        "DEMO REFERENCE (sample activity, nothing real)\n\n" +
+        "Since your last post:\n" +
+        "- Shipped a Remove-from-queue button so a scheduled post can be pulled back out.\n" +
+        "- Made same-day scheduling require at least 30 minutes of lead time.\n" +
+        "- No-date posts now auto-space one interval after the queue.\n\n" +
+        "This reference is canned for the demo. In the real tool it is built from your GitHub\n" +
+        "activity and notes since your last published post.",
+      referenceGeneratedAt: new Date().toISOString(),
+      lastPostedAt: null,
+      session: { ideas: [], selected_index: null, comments: "" },
+      activity: [],
+      activitySeq: 0,
+      order: [],
+      drafts: {},
+      idSeq: 0,
+    };
+
+    var IDEAS_A = [
+      { title: "What I learned shipping a cancel button",
+        angle: "A small feature with an outsized lesson about giving users an undo.",
+        rationale: "Concrete, recent, and shows product judgment, not just code." },
+      { title: "Scheduling is a promise, so guard it",
+        angle: "Why I added a 30-minute floor on same-day posts.",
+        rationale: "Turns a tiny rule into a point about respecting people's time." },
+      { title: "Building in public, one commit at a time",
+        angle: "How a personal tool becomes a portfolio.",
+        rationale: "Invites engagement and frames ongoing work as a story." },
+    ];
+    var IDEAS_B = [
+      { title: "The bug I almost shipped",
+        angle: "A near-miss that a test caught, and what it taught me.",
+        rationale: "Vulnerability plus a lesson reads well and feels honest." },
+      { title: "Why my side project has no database yet",
+        angle: "Choosing boring, local-first storage on purpose.",
+        rationale: "A contrarian take that sparks comments." },
+      { title: "From localhost to a live demo",
+        angle: "Making a private tool safe to show the world.",
+        rationale: "Ties directly to what you are doing right now." },
+    ];
+
+    var SKELETON =
+      "I just shipped a small thing that taught me a big lesson.\n\n" +
+      "[YOUR VOICE: what was the feature, in one plain sentence?]\n\n" +
+      "The interesting part was not the code. It was realizing that " +
+      "[YOUR VOICE: the insight, the moment it clicked for you].\n\n" +
+      "[YOUR VOICE: one honest takeaway a reader could use themselves.]\n\n" +
+      "What is a small feature that taught you something out of proportion to its size?";
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function nowDate() { return new Date(); }
+    function isoOffset(d) {
+      var off = -d.getTimezoneOffset(), sign = off >= 0 ? "+" : "-", abs = Math.abs(off);
+      return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+        "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) +
+        sign + pad(Math.floor(abs / 60)) + ":" + pad(abs % 60);
+    }
+    function log(text) {
+      store.activitySeq += 1;
+      var d = nowDate();
+      store.activity.push({ seq: store.activitySeq, ts: pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()), text: text });
+      if (store.activity.length > 200) store.activity.splice(0, store.activity.length - 200);
+    }
+    function newId() {
+      store.idSeq += 1;
+      var d = nowDate();
+      return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "-" +
+        pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + "-" + store.idSeq;
+    }
+    function words(body) { var t = (body || "").trim(); return t ? t.split(/\s+/).length : 0; }
+    function hasGaps(body) { return /\[YOUR VOICE/i.test(body || ""); }
+
+    function isLocked(iso) {
+      if (!iso) return false;
+      return nowDate().getTime() >= new Date(iso).getTime() - QUEUE_LOCK_MINUTES * 60000;
+    }
+    function editState(d) {
+      if (d.status === "posted" || d.status === "posting") return { editable: false, reason: "Draft " + d.id + " is " + d.status + " and cannot be edited." };
+      if (d.scheduled_at && isLocked(d.scheduled_at))
+        return { editable: false, reason: "Draft " + d.id + " is locked for publishing (" + QUEUE_LOCK_MINUTES + " minutes before the scheduled time)." };
+      return { editable: true, reason: "" };
+    }
+
+    // A same-day explicit time must clear the lead window. Errors carry an http status.
+    function assertMinLead(iso) {
+      var now = nowDate(), when = new Date(iso);
+      if (when.toDateString() !== now.toDateString()) return;
+      if (when.getTime() < now.getTime() + SAME_DAY_MIN_LEAD_MINUTES * 60000)
+        throw { status: 400, message: "A post scheduled for today must be at least " + SAME_DAY_MIN_LEAD_MINUTES + " minutes from now. Pick a later time today, or a future date." };
+    }
+    function defaultSchedule(excludeId) {
+      var intervalMs = store.settings.post_interval_days * 86400000;
+      var anchors = [];
+      store.order.forEach(function (id) {
+        if (id === excludeId) return;
+        var d = store.drafts[id];
+        if ((d.status === "queued" || d.status === "approved") && d.scheduled_at) anchors.push(new Date(d.scheduled_at).getTime());
+      });
+      if (store.lastPostedAt) anchors.push(new Date(store.lastPostedAt).getTime());
+      var base = anchors.length ? Math.max.apply(null, anchors) : nowDate().getTime();
+      return isoOffset(new Date(base + intervalMs));
+    }
+
+    function recordVersion(d, label, who) {
+      d.versions.push({ label: label, at: new Date().toISOString(), who: who, title: d.idea_title || "", body: d.body });
+    }
+
+    function runCheck(d) {
+      var flags = [];
+      if (hasGaps(d.body))
+        flags.push({ id: "formatting-gaps", category: "formatting", noOverride: true,
+          message: "Fill every [YOUR VOICE: ...] gap in your own words, then run the check again." });
+      flags.push({ id: "grammar-1", category: "grammar",
+        message: "Second sentence: 'its' reads as a possessive here. It should be the contraction 'it's'.",
+        excerpt: "its been a small change", suggestion: "it's been a small change" });
+      flags.push({ id: "factualness-1", category: "factualness",
+        message: "The reference does not support a specific percentage. Soften or cite it before publishing.",
+        excerpt: "a 30% improvement" });
+      recomputePassed({ flags: flags });
+      return { passed: flags.filter(openFlag).length === 0, flags: flags };
+    }
+    function openFlag(f) { return !f.overridden && !f.accepted; }
+    function recomputePassed(check) { check.passed = (check.flags || []).filter(openFlag).length === 0; }
+
+    function detail(d) {
+      var es = editState(d);
+      return {
+        id: d.id, status: d.status, title: d.idea_title || "", body: d.body,
+        scheduled_at: d.scheduled_at || null, media: [], media_warnings: [],
+        check: d.check || null,
+        check_stale: d.check ? d.checkBody !== d.body : false,
+        has_gaps: hasGaps(d.body),
+        editable: es.editable, lock_reason: es.reason,
+      };
+    }
+    function readyForApprove(d) {
+      if (!d.check) return [false, "Run the error check before queuing."];
+      if (d.checkBody !== d.body) return [false, "Draft changed since its last check. Run check again first."];
+      if (!d.check.passed) return [false, "The error check has open flags. Fix them or override what you accept."];
+      return [true, ""];
+    }
+
+    function listDrafts() {
+      return store.order.map(function (id) {
+        var d = store.drafts[id];
+        return { id: d.id, status: d.status, title: d.idea_title || "",
+          preview: (d.body || "").replace(/\n/g, " ").slice(0, 140),
+          scheduled_at: d.scheduled_at || null, media_count: 0, words: words(d.body) };
+      });
+    }
+
+    var QUEUE = { queued: 1, approved: 1, failed: 1 };
+    var DONE = { posted: 1, posting: 1 };
+
+    // Seed one queued and one plain draft so the dashboard is not empty on first load.
+    function seed() {
+      var a = makeDraft({ status: "pending", flow: "stage_b", idea_title: "What I learned shipping a cancel button",
+        body: "Giving people an undo changed how I think about small features.\n\nA cancel button is not glamorous, but it turns a scary action into a safe one. I shipped one this week and it reframed the whole flow for me.\n\nWhat is the smallest feature that changed how you build?" });
+      a.check = { passed: true, flags: [] }; a.checkBody = a.body;
+      var b = makeDraft({ status: "queued", flow: "stage_b", idea_title: "Scheduling is a promise",
+        body: "If a tool lets you schedule something, it owes you a little protection from yourself.\n\nI added a 30-minute floor on same-day posts so a slip of the finger can never fire a post two minutes from now. Small guardrails, fewer regrets.\n\nWhat guardrail has saved you from your own haste?" });
+      b.check = { passed: true, flags: [] }; b.checkBody = b.body;
+      b.scheduled_at = defaultSchedule(b.id);
+      log("demo: sandbox ready, nothing here is sent to LinkedIn");
+    }
+    function makeDraft(fields) {
+      var id = newId();
+      var d = { id: id, status: "pending", flow: undefined, idea_title: "", body: "",
+        created: new Date().toISOString(), scheduled_at: null, media: [],
+        check: null, checkBody: null, versions: [] };
+      Object.keys(fields || {}).forEach(function (k) { d[k] = fields[k]; });
+      store.drafts[id] = d; store.order.push(id);
+      recordVersion(d, "Draft created", "auto");
+      return d;
+    }
+
+    // ---- request router ----
+    function J(data, status) { return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json" } }); }
+    function need(id) { var d = store.drafts[id]; if (!d) throw { status: 404, message: "No draft with that id." }; return d; }
+
+    function route(rawUrl, opts) {
+      opts = opts || {};
+      var method = (opts.method || "GET").toUpperCase();
+      var u = String(rawUrl).replace(/^https?:\/\/[^/]+/, "");
+      var qs = "", path = u;
+      var qi = u.indexOf("?"); if (qi !== -1) { path = u.slice(0, qi); qs = u.slice(qi + 1); }
+      var body = {};
+      if (opts.body && typeof opts.body === "string") { try { body = JSON.parse(opts.body); } catch (e) { body = {}; } }
+
+      try {
+        // static reads
+        if (path === "/api/status" && method === "GET") {
+          var items = listDrafts();
+          var inDrafts = items.filter(function (x) { return !QUEUE[x.status] && !DONE[x.status]; });
+          var queued = items.filter(function (x) { return QUEUE[x.status]; });
+          var nextNudge = null;
+          if (store.lastPostedAt) {
+            var due = new Date(store.lastPostedAt).getTime() + store.settings.post_interval_days * 86400000;
+            nextNudge = Math.max(0, Math.ceil((due - nowDate().getTime()) / 86400000));
+          }
+          return J({ last_posted_at: store.lastPostedAt, reference_exists: true,
+            reference_generated: store.referenceGeneratedAt, next_nudge_days: nextNudge,
+            repos: ["iviang/linkedin-blogger (demo)"], draft_count: inDrafts.length, queued_count: queued.length });
+        }
+        if (path === "/api/drafts" && method === "GET")
+          return J({ drafts: listDrafts().filter(function (x) { return !QUEUE[x.status] && !DONE[x.status]; }) });
+        if (path === "/api/queue" && method === "GET")
+          return J({ queue: listDrafts().filter(function (x) { return QUEUE[x.status]; }) });
+        if (path === "/api/activity" && method === "GET") {
+          var after = parseInt((qs.match(/after=(\d+)/) || [])[1] || "0", 10);
+          return J({ entries: store.activity.filter(function (e) { return e.seq > after; }), last: store.activitySeq });
+        }
+        if (path === "/api/profile" && method === "GET") return J(store.profile);
+        if (path === "/api/reference" && method === "GET") return J({ exists: true, content: store.reference });
+        if (path === "/api/settings" && method === "GET") return J({ post_interval_days: store.settings.post_interval_days });
+        if (path === "/api/settings" && method === "POST") {
+          var days = parseInt(body.post_interval_days, 10);
+          if (isNaN(days)) return J({ error: "Enter a whole number of days." }, 400);
+          if (days < 1 || days > 365) return J({ error: "Posting frequency must be between 1 and 365 days." }, 400);
+          store.settings.post_interval_days = days;
+          return J({ post_interval_days: days });
+        }
+
+        // generation flow
+        if (path === "/api/ingest" && method === "POST") {
+          store.referenceGeneratedAt = new Date().toISOString();
+          log("ingest: rebuilt the reference from sample activity (demo)");
+          return J({ ok: true, since: null, reference_chars: store.reference.length });
+        }
+        if (path === "/api/brainstorm" && method === "POST") {
+          var set = body.reshuffle ? IDEAS_B : IDEAS_A;
+          store.session = { ideas: set.slice(), selected_index: null, comments: "" };
+          log("brainstorm: proposed " + set.length + " ideas (demo)");
+          return J({ ideas: store.session.ideas, selected_index: null });
+        }
+        if (path === "/api/ideas" && method === "GET")
+          return J({ ideas: store.session.ideas || [], selected_index: store.session.selected_index, comments: store.session.comments || "" });
+        if (path === "/api/select" && method === "POST") {
+          var idx = parseInt(body.index, 10);
+          if (isNaN(idx) || idx < 0 || idx >= (store.session.ideas || []).length) return J({ error: "No idea at that position. Brainstorm first." }, 400);
+          store.session.selected_index = idx; store.session.comments = (body.comment || "").trim();
+          return J({ ok: true, selected: store.session.ideas[idx] });
+        }
+        if (path === "/api/skeleton" && method === "POST") {
+          var sel = store.session.selected_index;
+          if (sel === null || sel === undefined) return J({ error: "Select an idea before creating a skeleton." }, 400);
+          var idea = store.session.ideas[sel];
+          var d = makeDraft({ status: "skeleton", flow: "stage_b", idea_title: idea.title, body: SKELETON });
+          log("skeleton: draft " + d.id + " created (demo)");
+          return J({ id: d.id, body: d.body });
+        }
+
+        // draft CRUD and actions
+        if (path === "/api/drafts/new" && method === "POST") {
+          var nd = makeDraft({ status: "pending", idea_title: (body.title || "").trim(), body: body.body || "" });
+          log("new: freestyle draft " + nd.id + " created (demo)");
+          return J(detail(nd));
+        }
+
+        var m = path.match(/^\/api\/drafts\/([^/]+)(\/.*)?$/);
+        if (m) {
+          var id = decodeURIComponent(m[1]);
+          var tail = m[2] || "";
+
+          if (tail === "" && method === "GET") return J(detail(need(id)));
+          if (tail === "" && method === "POST") {
+            var d1 = need(id); var es = editState(d1);
+            if (!es.editable) return J({ error: es.reason }, 400);
+            if (body.body === undefined || body.body === null) return J({ error: "Missing body." }, 400);
+            if ("title" in body) d1.idea_title = (body.title || "").trim();
+            d1.body = body.body;
+            recordVersion(d1, "Edited draft", "you");
+            return J(detail(d1));
+          }
+          if (tail === "" && method === "DELETE") {
+            var dd = need(id);
+            if (DONE[dd.status]) return J({ error: "A posted draft cannot be deleted here." }, 400);
+            delete store.drafts[id]; store.order = store.order.filter(function (x) { return x !== id; });
+            log("delete: " + id + " removed (demo)");
+            return J({ ok: true });
+          }
+          if (tail === "/check" && method === "POST") {
+            var dc = need(id);
+            if (DONE[dc.status]) return J({ error: "That draft is already posted." }, 400);
+            dc.check = runCheck(dc); dc.checkBody = dc.body;
+            if (dc.check.passed && dc.status === "skeleton") dc.status = "pending";
+            recordVersion(dc, dc.check.passed ? "Error check passed" : "Error check flagged issues", "auto");
+            log("check: " + (dc.check.passed ? "passed" : "found issues") + " on " + id + " (demo)");
+            return J(detail(dc));
+          }
+          if (tail === "/override" && method === "POST") {
+            var doo = need(id);
+            if (!doo.check) return J({ error: "Run the check first." }, 400);
+            var f = (doo.check.flags || []).filter(function (x) { return x.id === body.flag_id; })[0];
+            if (!f) return J({ error: "No such flag." }, 400);
+            if (f.noOverride) return J({ error: "This flag cannot be overridden; edit the draft to resolve it." }, 400);
+            f.overridden = true; recomputePassed(doo.check);
+            if (doo.check.passed && doo.status === "skeleton") doo.status = "pending";
+            recordVersion(doo, "Overrode " + body.flag_id, "you");
+            return J(detail(doo));
+          }
+          if (tail === "/accept" && method === "POST") {
+            var da = need(id); var es2 = editState(da);
+            if (!es2.editable) return J({ error: es2.reason }, 400);
+            var fa = (da.check && da.check.flags || []).filter(function (x) { return x.id === body.flag_id; })[0];
+            if (!fa) return J({ error: "No such flag." }, 400);
+            if (fa.suggestion && fa.excerpt && da.body.indexOf(fa.excerpt) !== -1) da.body = da.body.replace(fa.excerpt, fa.suggestion);
+            fa.accepted = true; recomputePassed(da.check); da.checkBody = da.body;
+            recordVersion(da, "Accepted fix for " + body.flag_id, "you");
+            log("accept: applied suggested fix for " + body.flag_id + " (demo)");
+            return J(detail(da));
+          }
+          if (tail === "/versions" && method === "GET") {
+            var dv = need(id);
+            return J({ versions: dv.versions.map(function (v, i) { return { index: i, label: v.label, at: v.at, who: v.who }; }) });
+          }
+          var vm = tail.match(/^\/versions\/(\d+)$/);
+          if (vm && method === "GET") {
+            var dvg = need(id); var v = dvg.versions[parseInt(vm[1], 10)];
+            if (!v) return J({ error: "No such version." }, 404);
+            return J({ title: v.title, body: v.body, label: v.label, at: v.at, who: v.who });
+          }
+          var vr = tail.match(/^\/versions\/(\d+)\/restore$/);
+          if (vr && method === "POST") {
+            var dr = need(id); var es3 = editState(dr);
+            if (!es3.editable) return J({ error: es3.reason }, 400);
+            var vv = dr.versions[parseInt(vr[1], 10)];
+            if (!vv) return J({ error: "No such version." }, 404);
+            dr.idea_title = vv.title; dr.body = vv.body;
+            recordVersion(dr, "Restored an earlier version", "you");
+            return J(detail(dr));
+          }
+          if (tail === "/schedule" && method === "POST") {
+            var ds = need(id);
+            if (DONE[ds.status]) return J({ error: "Draft is " + ds.status + " and cannot be scheduled." }, 400);
+            if (ds.status === "skeleton") return J({ error: "Fill the gaps and run check before scheduling." }, 400);
+            var ess = editState(ds); if (!ess.editable) return J({ error: ess.reason }, 400);
+            if (words(ds.body) > MAX_WORDS) return J({ error: "Draft is " + words(ds.body) + " words, over the " + MAX_WORDS + "-word limit. Trim it before queuing." }, 400);
+            if (!QUEUE[ds.status] && ds.flow === "stage_b") {
+              var rr = readyForApprove(ds); if (!rr[0]) return J({ error: rr[1] }, 400);
+            }
+            var when = body.scheduled_at;
+            var scheduled;
+            if (when) { assertMinLead(when); scheduled = isoOffset(new Date(when)); }
+            else { scheduled = defaultSchedule(id); }
+            ds.status = "queued"; ds.scheduled_at = scheduled;
+            recordVersion(ds, "Queued for publishing", "you");
+            log("queue: " + id + " scheduled for " + scheduled + " (demo)");
+            return J(detail(ds));
+          }
+          if (tail === "/unqueue" && method === "POST") {
+            var du = need(id);
+            if (!QUEUE[du.status]) return J({ error: "Only a queued draft can be removed from the queue." }, 400);
+            du.status = "pending"; du.scheduled_at = null;
+            recordVersion(du, "Removed from queue", "you");
+            log("queue: " + id + " removed from the queue (demo)");
+            return J(detail(du));
+          }
+          if (tail === "/publish" && method === "POST") {
+            var dp = need(id);
+            if (DONE[dp.status]) return J({ error: "Draft is already " + dp.status + "." }, 400);
+            if (dp.status === "skeleton") return J({ error: "Fill the gaps and run check before publishing." }, 400);
+            if (dp.flow === "stage_b") { var rp = readyForApprove(dp); if (!rp[0]) return J({ error: rp[1] }, 400); }
+            if (words(dp.body) > MAX_WORDS) return J({ error: "Draft is " + words(dp.body) + " words, over the " + MAX_WORDS + "-word limit. Trim it before publishing." }, 400);
+            dp.status = "posted"; dp.scheduled_at = dp.scheduled_at || null;
+            dp.posted_urn = "urn:li:share:DEMO" + store.idSeq; store.lastPostedAt = new Date().toISOString();
+            recordVersion(dp, "Published (demo)", "auto");
+            log("publish: " + id + " pretend-posted, nothing left the page (demo)");
+            return J({ ok: true, error: null, draft: detail(dp) });
+          }
+          // media endpoints are disabled in the demo
+          if (tail.indexOf("/media") === 0) return J({ error: "Photo upload is turned off in the demo." }, 400);
+        }
+
+        if (path === "/api/publish" && method === "POST") {
+          var pub = 0;
+          store.order.slice().forEach(function (id) {
+            var d = store.drafts[id];
+            if ((d.status === "queued" || d.status === "approved") && d.scheduled_at && nowDate().getTime() >= new Date(d.scheduled_at).getTime()) {
+              d.status = "posted"; d.posted_urn = "urn:li:share:DEMO" + (++store.idSeq); store.lastPostedAt = new Date().toISOString(); pub += 1;
+            }
+          });
+          return J({ published: pub, failed: 0, results: [] });
+        }
+
+        return J({ error: "Not found (demo): " + method + " " + path }, 404);
+      } catch (err) {
+        if (err && err.status) return J({ error: err.message }, err.status);
+        return J({ error: "Demo error: " + (err && err.message || err) }, 500);
+      }
+    }
+
+    seed();
+    return { route: route, store: store };
+  }
+
+  function installMock() {
+    var mock = createMock();
+    root.fetch = function (url, opts) {
+      try { return Promise.resolve(mock.route(url, opts || {})); }
+      catch (e) { return Promise.resolve(new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json" } })); }
+    };
+    return mock;
+  }
+
+  root.__DEMO_MOCK__ = { createMock: createMock, installMock: installMock };
+  if (typeof module !== "undefined" && module.exports) module.exports = { createMock: createMock, installMock: installMock };
+})(typeof window !== "undefined" ? window : globalThis);
+
+window.__DEMO_MOCK__.installMock();
+  </script>
+  <script>
+    function esc(s) {
+      return (s || "").replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+    async function getJSON(url) { const r = await fetch(url); return r.json(); }
+    async function postJSON(url, body) {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+      return data;
+    }
+    function pill(status) { return '<span class="st ' + esc(status) + '">' + esc(status) + "</span>"; }
+    function flowMsg(text, cls) {
+      var el = document.getElementById("flowMsg");
+      el.textContent = text || "";
+      el.className = "count grow" + (cls ? " " + cls : "");
+    }
+
+    function renderList(id, items, emptyMsg) {
+      var el = document.getElementById(id);
+      if (!items.length) { el.innerHTML = '<p class="empty">' + emptyMsg + "</p>"; return; }
+      el.innerHTML = items.map(function (it) {
+        var sched = it.scheduled_at ? '<div class="row-sched">' + new Date(it.scheduled_at).toLocaleString() + "</div>" : "";
+        var mark = it.words > MAX_WORDS ? ' <span class="mark">too long</span>' : "";
+        return '<div class="row" data-id="' + esc(it.id) + '"><div class="row-main"><div class="row-t">' +
+          esc(it.title || "(untitled)") + " " + pill(it.status) + mark + '</div><div class="row-p">' +
+          esc(it.preview) + '&hellip;</div></div><div class="row-meta"><div class="row-id">' +
+          esc(it.id) + "</div>" + sched + "</div></div>";
+      }).join("");
+    }
+
+    function renderQueue(items) {
+      var el = document.getElementById("queue");
+      if (!items.length) { el.innerHTML = '<p class="empty">Queue is empty.</p>'; return; }
+      el.innerHTML = items.map(function (it) {
+        var when = it.scheduled_at ? new Date(it.scheduled_at).toLocaleString() : "unscheduled";
+        var mark = it.words > MAX_WORDS ? ' <span class="mark">too long</span>' : "";
+        return '<div class="qitem" data-id="' + esc(it.id) + '"><div class="qi-t">' +
+          esc(it.title || "(untitled)") + mark + '</div><div class="qi-m">' + esc(when) + "</div></div>";
+      }).join("");
+    }
+
+    async function load() {
+      try {
+        var s = await getJSON("/api/status");
+        var last = s.last_posted_at ? "last post " + new Date(s.last_posted_at).toLocaleDateString() : "no posts yet";
+        document.getElementById("chips").innerHTML =
+          '<span class="chip ' + (s.reference_exists ? "ok" : "warn") + '">' +
+          (s.reference_exists ? "reference ready" : "no reference · run ingest") + "</span>" +
+          '<span class="chip">' + s.draft_count + " drafts</span>" +
+          '<span class="chip">' + s.queued_count + " queued</span>" +
+          '<span class="chip">' + last + "</span>";
+        document.getElementById("draftCount").textContent = s.draft_count + " total";
+        document.getElementById("queueCount").textContent = s.queued_count + " scheduled";
+        document.getElementById("metaRef").textContent = s.reference_generated ? relDate(s.reference_generated) : "none yet";
+        document.getElementById("metaNudge").textContent = s.next_nudge_days == null
+          ? "after first post"
+          : (s.next_nudge_days === 0 ? "due now" : "in ~" + s.next_nudge_days + (s.next_nudge_days === 1 ? " day" : " days"));
+
+        var d = await getJSON("/api/drafts");
+        renderList("drafts", d.drafts, "No drafts yet. Brainstorm above, or just write in the editor.");
+        var q = await getJSON("/api/queue");
+        renderQueue(q.queue);
+      } catch (e) {
+        document.getElementById("chips").innerHTML = '<span class="chip warn">could not reach server</span>';
+      }
+    }
+
+    var selectedIdea = null;
+
+    function renderIdeas(ideas, selIndex) {
+      var box = document.getElementById("ideas");
+      if (!ideas || !ideas.length) {
+        box.innerHTML = "";
+        document.getElementById("skeletonStep").hidden = true;
+        document.getElementById("reshuffleBtn").hidden = true;
+        return;
+      }
+      box.innerHTML = ideas.map(function (it, i) {
+        return '<label class="idea" data-i="' + i + '"><input type="radio" name="idea" value="' + i + '">' +
+          '<span><span class="idea-t">' + esc(it.title || "(untitled)") + "</span>" +
+          '<span class="idea-a">' + esc(it.angle || "") + "</span>" +
+          '<span class="idea-r">' + esc(it.rationale || "") + "</span></span></label>";
+      }).join("");
+      document.getElementById("skeletonStep").hidden = false;
+      document.getElementById("reshuffleBtn").hidden = false;
+
+      Array.prototype.forEach.call(box.querySelectorAll('input[name="idea"]'), function (input) {
+        input.addEventListener("change", function () {
+          selectedIdea = parseInt(this.value, 10);
+          Array.prototype.forEach.call(box.querySelectorAll(".idea"), function (l) { l.classList.remove("sel"); });
+          this.closest(".idea").classList.add("sel");
+          document.getElementById("skeletonBtn").disabled = false;
+        });
+      });
+
+      selectedIdea = (selIndex === 0 || selIndex) ? selIndex : null;
+      if (selectedIdea != null) {
+        var chosen = box.querySelector('.idea[data-i="' + selectedIdea + '"]');
+        if (chosen) { chosen.classList.add("sel"); chosen.querySelector("input").checked = true; }
+        document.getElementById("skeletonBtn").disabled = false;
+      } else {
+        document.getElementById("skeletonBtn").disabled = true;
+      }
+    }
+
+    async function runBrainstorm(reshuffle) {
+      flowMsg(reshuffle ? "Reshuffling ideas&hellip;" : "Brainstorming ideas&hellip;", "busy");
+      document.getElementById("brainstormBtn").disabled = true;
+      document.getElementById("reshuffleBtn").disabled = true;
+      try {
+        var r = await postJSON("/api/brainstorm", { reshuffle: !!reshuffle });
+        renderIdeas(r.ideas, null);
+        flowMsg(r.ideas.length + " ideas. Pick one, then create the skeleton.");
+      } catch (e) {
+        flowMsg(e.message, "err");
+      } finally {
+        document.getElementById("brainstormBtn").disabled = false;
+        document.getElementById("reshuffleBtn").disabled = false;
+      }
+    }
+
+    document.getElementById("ingestBtn").addEventListener("click", async function () {
+      this.disabled = true;
+      flowMsg("Collecting activity since your last post&hellip;", "busy");
+      try {
+        var r = await postJSON("/api/ingest");
+        flowMsg(r.since
+          ? "Reference rebuilt (since " + new Date(r.since).toLocaleDateString() + ")."
+          : "Reference rebuilt (all history, no prior post yet).");
+        load();
+      } catch (e) {
+        flowMsg(e.message, "err");
+      } finally {
+        this.disabled = false;
+      }
+    });
+
+    document.getElementById("brainstormBtn").addEventListener("click", function () { runBrainstorm(false); });
+    document.getElementById("reshuffleBtn").addEventListener("click", function () { runBrainstorm(true); });
+
+    document.getElementById("skeletonBtn").addEventListener("click", async function () {
+      if (selectedIdea == null) return;
+      this.disabled = true;
+      flowMsg("Writing skeleton draft&hellip;", "busy");
+      try {
+        await postJSON("/api/select", { index: selectedIdea, comment: document.getElementById("direction").value });
+        var r = await postJSON("/api/skeleton");
+        flowMsg("Draft " + r.id + " created and opened below.");
+        renderIdeas([], null);
+        document.getElementById("direction").value = "";
+        selectedIdea = null;
+        load();
+        openEditor(r.id); // auto-open the new skeleton in the editor
+      } catch (e) {
+        flowMsg(e.message, "err");
+        this.disabled = false;
+      }
+    });
+
+    function freqNote(text, cls) {
+      var el = document.getElementById("freqNote");
+      el.textContent = text || "";
+      el.className = "note" + (cls ? " " + cls : "");
+    }
+    var profile = { name: null, picture: null };
+    async function loadProfile() {
+      try { profile = await getJSON("/api/profile"); } catch (e) { /* preview falls back */ }
+    }
+    async function loadSettings() {
+      try {
+        var s = await getJSON("/api/settings");
+        document.getElementById("freq").value = s.post_interval_days;
+      } catch (e) { /* ignore; server not reachable */ }
+    }
+    document.getElementById("freqSave").addEventListener("click", async function () {
+      var val = document.getElementById("freq").value;
+      freqNote("Saving…", "busy");
+      try {
+        var s = await postJSON("/api/settings", { post_interval_days: parseInt(val, 10) });
+        document.getElementById("freq").value = s.post_interval_days;
+        freqNote("Saved. Posts and nudges now use " + s.post_interval_days + " days.", "ok");
+        load(); // refresh the sidebar so Next nudge reflects the new interval
+      } catch (e) { freqNote(e.message, "warn"); }
+    });
+
+    async function loadIdeas() {
+      try {
+        var r = await getJSON("/api/ideas");
+        if (r.ideas && r.ideas.length) {
+          renderIdeas(r.ideas, r.selected_index);
+          if (r.comments) document.getElementById("direction").value = r.comments;
+        }
+      } catch (e) { /* no session yet; ignore */ }
+    }
+
+    // Compose collapse
+    function setComposeCollapsed(collapsed) {
+      document.getElementById("newPost").classList.toggle("collapsed", collapsed);
+      document.getElementById("composeCaret").innerHTML = collapsed ? "&#9656;" : "&#9662;";
+    }
+    document.getElementById("composeHead").addEventListener("click", function () {
+      setComposeCollapsed(!document.getElementById("newPost").classList.contains("collapsed"));
+    });
+
+    // --- draft editor ---
+    var currentDraftId = null;
+    var currentStatus = null;
+    var currentMedia = [];
+    var saveTimer = null;
+    var createPromise = null;
+
+    function eNote(text, cls) {
+      var el = document.getElementById("eNote");
+      el.textContent = text || "";
+      el.className = "note" + (cls ? " " + cls : "");
+    }
+    function eSchedNote(text, cls) {
+      var el = document.getElementById("eSchedNote");
+      el.textContent = text || "";
+      el.className = "note" + (cls ? " " + cls : "");
+      el.style.display = "block";
+    }
+    function ePubNote(text, cls) {
+      var el = document.getElementById("ePubNote");
+      el.textContent = text || "";
+      el.className = "note" + (cls ? " " + cls : "");
+      el.style.display = "block";
+    }
+    function pad2(n) { return String(n).padStart(2, "0"); }
+    function toISOWithOffset(localValue) {
+      var d = new Date(localValue);
+      var off = -d.getTimezoneOffset();
+      var sign = off >= 0 ? "+" : "-";
+      var abs = Math.abs(off);
+      return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+        "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":00" +
+        sign + pad2(Math.floor(abs / 60)) + ":" + pad2(abs % 60);
+    }
+    function toLocalInput(iso) {
+      var d = new Date(iso);
+      return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+        "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    }
+
+    function renderCheck(detail) {
+      var flags = document.getElementById("eFlags");
+      var check = detail.check;
+      var over = wordCount() > MAX_WORDS;
+
+      // Displayed flags: the saved check's flags (minus any length flag, which we compute live)
+      // plus a non-overridable over-limit flag whenever the draft is too long. An over-length
+      // draft then shows the problem the moment it opens, before any check has been run.
+      var list = (check && check.flags) ? check.flags.filter(function (f) { return f.category !== "length"; }) : [];
+      if (over) {
+        list = [{
+          id: "length-long", category: "length", noOverride: true,
+          message: "Post is " + wordCount() + " words, over the " + MAX_WORDS + "-word limit. Trim it to queue or publish."
+        }].concat(list);
+      }
+
+      if (over) {
+        eNote("Over the " + MAX_WORDS + "-word limit. Trim it before queuing.", "warn");
+      } else if (detail.check_stale) {
+        eNote("Body changed since the last check. Run check again.", "warn");
+      } else if (!check) {
+        eNote(detail.has_gaps ? "Fill every [YOUR VOICE] gap, then run check." : "Not checked yet.");
+      } else {
+        var openCount = list.filter(function (f) { return !f.overridden; }).length;
+        eNote(openCount ? "Check found issues. Edit the draft, or override what you accept." : "Check passed. Ready to schedule or publish.",
+          openCount ? "warn" : "ok");
+      }
+
+      if (!list.length) { flags.innerHTML = ""; return; }
+      flags.innerHTML = list.map(function (f) {
+        var ovr = f.overridden;
+        var hasEx = !!f.excerpt;
+        var hasSug = !!f.suggestion;
+        var status = f.accepted ? '<span class="note ok">accepted</span>'
+          : ovr ? '<span class="note ok">overridden</span>'
+          : f.noOverride ? ""
+          : '<button class="btn" data-flag="' + esc(f.id) + '">Override</button>';
+        var sug = (hasSug && !ovr)
+          ? '<div class="flag-sug"><div class="flag-sug-h">Suggested fix</div><div class="flag-sug-t">' +
+            esc(f.suggestion) + '</div><button class="btn primary" data-accept="' + esc(f.id) + '">Accept fix</button></div>'
+          : "";
+        var catClass = f.category ? " cat-" + esc(f.category) : "";
+        return '<div class="flag' + catClass + (ovr ? " ovr" : "") + (hasEx ? " has-ex" : "") + '"' +
+          (hasEx ? ' data-excerpt="' + esc(f.excerpt) + '" title="Click to find this in the draft"' : "") +
+          '><div class="flag-top"><span class="flag-cat">' + esc(f.category || "") + "</span>" + status +
+          '</div><div class="flag-msg">' + esc(f.message || "") + "</div>" +
+          (hasEx ? '<div class="flag-ex">' + esc(f.excerpt) + "</div><div class=\"flag-hint\">Click to highlight in the draft</div>" : "") +
+          sug + "</div>";
+      }).join("");
+      Array.prototype.forEach.call(flags.querySelectorAll("button[data-flag]"), function (btn) {
+        btn.addEventListener("click", function (e) { e.stopPropagation(); overrideFlag(this.getAttribute("data-flag")); });
+      });
+      Array.prototype.forEach.call(flags.querySelectorAll("button[data-accept]"), function (btn) {
+        btn.addEventListener("click", function (e) { e.stopPropagation(); acceptFlag(this.getAttribute("data-accept")); });
+      });
+      Array.prototype.forEach.call(flags.querySelectorAll(".flag.has-ex"), function (fl) {
+        fl.addEventListener("click", function () { highlightExcerpt(this.getAttribute("data-excerpt")); });
+      });
+    }
+
+    var MAX_WORDS = 220;
+    // Base disabled state of the queue/publish buttons (from status/lock), before the word
+    // limit is applied on top.
+    var scheduleLocked = true, publishLocked = true;
+
+    function wordCount() {
+      var t = document.getElementById("ePost").value.trim();
+      return t ? t.split(/\s+/).length : 0;
+    }
+
+    // A draft over the word limit cannot be queued or published until it is trimmed.
+    function applyGate() {
+      var over = wordCount() > MAX_WORDS;
+      document.getElementById("eSchedule").disabled = scheduleLocked || over;
+      document.getElementById("ePublish").disabled = publishLocked || over;
+      document.getElementById("gateWarn").hidden = !over;
+    }
+
+    // Word count against LinkedIn's 120-220 target: the meter fills toward 220, and it turns
+    // amber under 120 (too short) or red over 220 (too long).
+    function updateWordCount() {
+      var n = wordCount();
+      var wc = document.getElementById("wordCount");
+      wc.textContent = n + " / " + MAX_WORDS + " words";
+      var state = n > MAX_WORDS ? "over" : (n > 0 && n < 120 ? "under" : "");
+      wc.className = "wordcount" + (state ? " " + state : "");
+      var meter = document.getElementById("wordMeter");
+      meter.style.width = Math.min(100, Math.round(n / MAX_WORDS * 100)) + "%";
+      meter.className = state;
+      applyGate();
+    }
+
+    function relDate(iso) {
+      var d = new Date(iso), now = new Date();
+      return d.toDateString() === now.toDateString() ? "today" : d.toLocaleDateString();
+    }
+
+    // Grow the body textarea to fit its content so it never scrolls internally; the page
+    // scrolls instead, which keeps a highlighted excerpt from hiding in the box's overflow.
+    function autoGrow(ta) {
+      if (!ta) return;
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    }
+
+    // Page Y of the character at `idx`, measured with a hidden mirror that matches the
+    // textarea's font, width, and padding.
+    function excerptPageY(ta, idx) {
+      var cs = getComputedStyle(ta);
+      var padL = parseFloat(cs.paddingLeft), padR = parseFloat(cs.paddingRight);
+      var mirror = document.createElement("div");
+      mirror.style.cssText = "position:absolute;visibility:hidden;top:0;left:-9999px;white-space:pre-wrap;word-wrap:break-word;box-sizing:content-box;padding:0;border:0;margin:0;";
+      mirror.style.width = (ta.clientWidth - padL - padR) + "px";
+      ["fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight", "letterSpacing"].forEach(function (p) {
+        mirror.style[p] = cs[p];
+      });
+      mirror.textContent = ta.value.substring(0, idx);
+      var marker = document.createElement("span");
+      marker.textContent = "​";
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      var within = marker.offsetTop;
+      document.body.removeChild(mirror);
+      var rect = ta.getBoundingClientRect();
+      return rect.top + window.scrollY + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop) + within;
+    }
+
+    // Select the flagged excerpt in the editor body (native selection = highlight) and scroll
+    // the page so it sits mid-viewport.
+    function highlightExcerpt(excerpt) {
+      if (!excerpt) return;
+      var ta = document.getElementById("ePost");
+      var text = ta.value;
+      var idx = text.indexOf(excerpt);
+      if (idx === -1) {
+        // The excerpt may be truncated ("...") or slightly changed since the check; try a prefix.
+        var probe = excerpt.replace(/\s*\.\.\.\s*$/, "").slice(0, 40);
+        idx = probe ? text.indexOf(probe) : -1;
+        if (idx === -1) { eNote("That excerpt is not in the current text (it changed since the check).", "warn"); return; }
+        excerpt = probe;
+      }
+      autoGrow(ta); // make sure it fits its content before we measure
+      ta.focus();
+      ta.setSelectionRange(idx, idx + excerpt.length);
+      var y = excerptPageY(ta, idx);
+      window.scrollTo({ top: Math.max(0, y - window.innerHeight / 2), behavior: "smooth" });
+    }
+
+    // Blank freestyle state: editor open, no draft yet.
+    function resetEditor() {
+      currentDraftId = null; currentStatus = null; currentMedia = []; createPromise = null;
+      document.getElementById("eId").textContent = "New post — freestyle";
+      document.getElementById("eLock").hidden = true;
+      document.getElementById("eTitle").value = ""; document.getElementById("eTitle").disabled = false;
+      document.getElementById("ePost").value = ""; document.getElementById("ePost").readOnly = false;
+      autoGrow(document.getElementById("ePost"));
+      updateWordCount();
+      document.getElementById("eSave").disabled = false;
+      document.getElementById("eCheck").disabled = false;
+      document.getElementById("eFlags").innerHTML = "";
+      eNote("Start writing. Your post saves automatically as a draft.");
+      document.getElementById("eGallery").innerHTML = "";
+      document.getElementById("eMediaWarn").hidden = true;
+      var drop = document.getElementById("eDrop"); drop.style.pointerEvents = ""; drop.style.opacity = "";
+      document.getElementById("eWhen").value = ""; document.getElementById("eWhen").disabled = false;
+      document.getElementById("eSchedule").textContent = "Queue";
+      document.getElementById("eUnqueue").hidden = true;
+      scheduleLocked = true; publishLocked = true;
+      document.getElementById("eDelete").disabled = true;
+      applyGate();
+      eSchedNote("Start typing to save the draft, then you can schedule it."); ePubNote("");
+      document.getElementById("pvOverlay").hidden = true;
+      loadVersions(null);
+    }
+
+    // After a freestyle draft is first saved, adopt its id without disturbing the text.
+    function adoptCreatedDraft(detail) {
+      currentDraftId = detail.id; currentStatus = detail.status; currentMedia = detail.media || [];
+      document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
+      scheduleLocked = false; publishLocked = false;
+      document.getElementById("eDelete").disabled = false;
+      applyGate();
+      eSchedNote("Not scheduled. Leave the time empty to auto-space it after the queue.");
+      loadVersions(detail.id);
+    }
+
+    function fillEditor(detail) {
+      currentDraftId = detail.id;
+      currentStatus = detail.status;
+      createPromise = null;
+      document.getElementById("eId").textContent = "Draft " + detail.id + "  ·  " + detail.status;
+      document.getElementById("eTitle").value = detail.title || "";
+      document.getElementById("ePost").value = detail.body || "";
+      autoGrow(document.getElementById("ePost"));
+      updateWordCount();
+      var lock = document.getElementById("eLock");
+      var ro = !detail.editable;
+      if (ro) { lock.textContent = detail.lock_reason || "This draft cannot be edited."; lock.hidden = false; }
+      else { lock.hidden = true; }
+      document.getElementById("eTitle").disabled = ro;
+      document.getElementById("ePost").readOnly = ro;
+      document.getElementById("eSave").disabled = ro;
+      document.getElementById("eCheck").disabled = ro;
+      renderCheck(detail);
+
+      var when = document.getElementById("eWhen");
+      when.value = detail.scheduled_at ? toLocalInput(detail.scheduled_at) : "";
+      when.disabled = ro;
+      var queued = detail.status === "queued" || detail.status === "approved" || detail.status === "failed";
+      var schedBtn = document.getElementById("eSchedule");
+      schedBtn.textContent = queued ? "Update schedule" : "Queue";
+      // Any queued draft can be pulled out, even a locked one: de-queuing cancels the post
+      // rather than editing it, so it stays available inside the publish lock.
+      document.getElementById("eUnqueue").hidden = !queued;
+      scheduleLocked = ro;
+      document.getElementById("eDelete").disabled = detail.status === "posted" || detail.status === "posting";
+      eSchedNote(detail.scheduled_at
+        ? "Currently " + new Date(detail.scheduled_at).toLocaleString()
+        : "Not scheduled. Leave the time empty to auto-space it after the queue.");
+
+      currentMedia = detail.media || [];
+      var drop = document.getElementById("eDrop");
+      drop.style.pointerEvents = ro ? "none" : "";
+      drop.style.opacity = ro ? ".5" : "";
+      renderGallery(ro);
+      var mw = document.getElementById("eMediaWarn");
+      if (detail.media_warnings && detail.media_warnings.length) {
+        mw.innerHTML = detail.media_warnings.map(esc).join("<br>");
+        mw.hidden = false;
+      } else {
+        mw.hidden = true;
+      }
+
+      publishLocked = detail.status === "posted" || detail.status === "posting" || detail.status === "skeleton";
+      ePubNote(detail.status === "posted" ? "Already posted." : "");
+
+      document.getElementById("pvOverlay").hidden = true;
+
+      applyGate();
+      loadVersions(detail.id);
+    }
+
+    async function openEditor(id) {
+      // Flush a pending autosave for whatever draft is open before switching to another.
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await flushSave(); }
+      createPromise = null;
+      document.getElementById("eFlags").innerHTML = "";
+      eNote("Loading…", "busy");
+      setComposeCollapsed(true);
+      try {
+        var detail = await getJSON("/api/drafts/" + encodeURIComponent(id));
+        if (detail.error) throw new Error(detail.error);
+        fillEditor(detail);
+        document.getElementById("editorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    function newDraft() {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushSave(); }
+      resetEditor();
+      setComposeCollapsed(true);
+      document.getElementById("editorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("ePost").focus();
+    }
+    document.getElementById("newDraftBtn").addEventListener("click", newDraft);
+
+    async function saveDraft() {
+      if (currentDraftId) {
+        return postJSON("/api/drafts/" + encodeURIComponent(currentDraftId), {
+          body: document.getElementById("ePost").value,
+          title: document.getElementById("eTitle").value,
+        });
+      }
+      // Freestyle: create the draft on first save. Dedupe concurrent autosaves via one promise.
+      if (!createPromise) {
+        createPromise = postJSON("/api/drafts/new", {
+          title: document.getElementById("eTitle").value,
+          body: document.getElementById("ePost").value,
+        }).then(function (d) {
+          adoptCreatedDraft(d); load(); return d;
+        }).catch(function (e) { createPromise = null; throw e; });
+      }
+      return createPromise;
+    }
+
+    function scheduleAutosave() {
+      if (saveTimer) clearTimeout(saveTimer);
+      eNote("Editing…");
+      saveTimer = setTimeout(flushSave, 900);
+    }
+    async function flushSave() {
+      saveTimer = null;
+      // Don't create a junk draft from an empty freestyle editor.
+      if (!currentDraftId &&
+          !document.getElementById("ePost").value.trim() &&
+          !document.getElementById("eTitle").value.trim()) return;
+      try {
+        await saveDraft();
+        eNote("Saved. Re-run check if you changed the wording.", "ok");
+        load();
+        loadVersions(currentDraftId);
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+    document.getElementById("ePost").addEventListener("input", scheduleAutosave);
+    document.getElementById("eTitle").addEventListener("input", scheduleAutosave);
+    document.getElementById("ePost").addEventListener("input", function () { autoGrow(this); });
+    document.getElementById("ePost").addEventListener("input", updateWordCount);
+    document.getElementById("ePost").addEventListener("focus", function () { setComposeCollapsed(true); });
+    window.addEventListener("resize", function () { autoGrow(document.getElementById("ePost")); });
+
+    document.getElementById("eSave").addEventListener("click", async function () {
+      this.disabled = true;
+      eNote("Saving…", "busy");
+      try { fillEditor(await saveDraft()); load(); }
+      catch (e) { eNote(e.message, "warn"); }
+      finally { this.disabled = false; }
+    });
+
+    document.getElementById("eCheck").addEventListener("click", async function () {
+      this.disabled = true;
+      eNote("Checking against reference…", "busy");
+      try {
+        await saveDraft(); // check the text on screen, and create the draft first if freestyle
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/check", {}));
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+      finally { this.disabled = false; }
+    });
+
+    async function overrideFlag(flagId) {
+      if (!currentDraftId) return;
+      eNote("Overriding…", "busy");
+      try {
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/override",
+          { flag_id: flagId }));
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function acceptFlag(flagId) {
+      if (!currentDraftId) return;
+      eNote("Applying the fix…", "busy");
+      try {
+        // Flush any pending edit so the fix applies on top of the latest text.
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/accept",
+          { flag_id: flagId }));
+        load();
+        eNote("Fix applied.", "ok");
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    document.getElementById("eSchedule").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      var raw = document.getElementById("eWhen").value;
+      this.disabled = true;
+      eSchedNote(raw ? "Scheduling…" : "Auto-scheduling after the queue…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        var payload = raw ? { scheduled_at: toISOWithOffset(raw) } : {};
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/schedule", payload));
+        load();
+      } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    document.getElementById("eUnqueue").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      if (!window.confirm("Remove draft " + currentDraftId + " from the queue? It returns to your drafts, unscheduled.")) return;
+      this.disabled = true;
+      eSchedNote("Removing from the queue…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        fillEditor(await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/unqueue", {}));
+        load();
+        eSchedNote("Removed from the queue. It is back in your drafts, unscheduled.", "ok");
+      } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    document.getElementById("eDelete").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      if (!window.confirm("Move draft " + currentDraftId + " to trash? You can recover it from drafts/trash.")) return;
+      this.disabled = true;
+      eSchedNote("Deleting…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        var did = currentDraftId;
+        currentDraftId = null; // stop any flush for the deleted draft
+        var r = await fetch("/api/drafts/" + encodeURIComponent(did), { method: "DELETE" });
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+        resetEditor();
+        load();
+      } catch (e) { eSchedNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    // Photos
+    function mediaUrl(i) {
+      return "/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "?t=" + Date.now();
+    }
+    function renderGallery(ro) {
+      var g = document.getElementById("eGallery");
+      g.innerHTML = "";
+      currentMedia.forEach(function (m, i) {
+        var isVideo = m.kind === "video";
+        var item = document.createElement("div");
+        item.className = "gitem";
+
+        var thumb;
+        if (isVideo) {
+          thumb = document.createElement("video");
+          thumb.src = mediaUrl(i);
+          thumb.muted = true;
+          thumb.setAttribute("playsinline", "");
+        } else {
+          thumb = document.createElement("img");
+          thumb.src = mediaUrl(i);
+          thumb.alt = m.alt || ("photo " + (i + 1));
+        }
+
+        var col = document.createElement("div");
+        col.className = "gcol";
+
+        if (isVideo) {
+          var label = document.createElement("div");
+          label.className = "note";
+          label.textContent = "Video";
+          col.appendChild(label);
+        } else {
+          var alt = document.createElement("input");
+          alt.className = "alt";
+          alt.type = "text";
+          alt.placeholder = "Alt text: describe this photo for screen readers";
+          alt.value = m.alt || "";
+          alt.disabled = ro;
+          var altTimer = null;
+          alt.addEventListener("input", function () {
+            var val = this.value;
+            if (altTimer) clearTimeout(altTimer);
+            altTimer = setTimeout(function () { saveAlt(i, val); }, 700);
+          });
+          col.appendChild(alt);
+        }
+
+        if (m.warnings && m.warnings.length) {
+          var w = document.createElement("div");
+          w.className = "gwarn";
+          w.textContent = m.warnings.join("  ");
+          col.appendChild(w);
+        }
+
+        var row = document.createElement("div");
+        if (!isVideo) {
+          var desc = document.createElement("button");
+          desc.className = "btn describe-btn";
+          desc.textContent = "Describe";
+          desc.style.marginTop = "8px";
+          desc.style.marginRight = "8px";
+          desc.disabled = ro;
+          desc.addEventListener("click", function () { describePhoto(i); });
+          row.appendChild(desc);
+        }
+        var rm = document.createElement("button");
+        rm.className = "btn danger";
+        rm.textContent = "Remove";
+        rm.style.marginTop = "8px";
+        rm.disabled = ro;
+        rm.addEventListener("click", function () { removePhoto(i); });
+        row.appendChild(rm);
+
+        col.appendChild(row);
+        item.appendChild(thumb);
+        item.appendChild(col);
+        g.appendChild(item);
+      });
+    }
+
+    var eDrop = document.getElementById("eDrop");
+    var eFile = document.getElementById("eFile");
+    eDrop.addEventListener("click", function () { if (currentDraftId) eFile.click(); else eNote("Save the draft first (type something), then add media.", "warn"); });
+    eFile.addEventListener("change", function () {
+      if (this.files && this.files.length) uploadMedia(this.files);
+      this.value = "";
+    });
+    eDrop.addEventListener("dragover", function (e) { e.preventDefault(); this.classList.add("over"); });
+    eDrop.addEventListener("dragleave", function () { this.classList.remove("over"); });
+    eDrop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      this.classList.remove("over");
+      if (e.dataTransfer.files && e.dataTransfer.files.length) uploadMedia(e.dataTransfer.files);
+    });
+
+    async function uploadMedia(files) {
+      if (!files || !files.length) return;
+      if (!currentDraftId) { eNote("Type something first so the draft is saved, then add media.", "warn"); return; }
+      var fd = new FormData();
+      for (var i = 0; i < files.length; i++) fd.append("file", files[i]);
+      eNote(files.length > 1 ? ("Uploading " + files.length + " files…") : "Uploading…", "busy");
+      try {
+        var r = await fetch("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media",
+          { method: "POST", body: fd });
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+        fillEditor(data);
+        load();
+        var pending = [];
+        currentMedia.forEach(function (m, idx) { if (m.kind !== "video" && !m.alt) pending.push(idx); });
+        if (pending.length) {
+          eNote("Describing " + pending.length + (pending.length > 1 ? " photos" : " photo") + " for screen readers…", "busy");
+          for (var k = 0; k < pending.length; k++) await describePhoto(pending[k]);
+          eNote("Alt text added. Edit any description you want to change.", "ok");
+        } else {
+          eNote("Added.", "ok");
+        }
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function saveAlt(i, val) {
+      if (!currentDraftId) return;
+      try {
+        await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "/alt", { alt: val });
+        if (currentMedia[i]) currentMedia[i].alt = val;
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function describePhoto(i) {
+      if (!currentDraftId) return;
+      var item = document.querySelectorAll("#eGallery .gitem")[i];
+      var input = item ? item.querySelector(".alt") : null;
+      var btn = item ? item.querySelector(".describe-btn") : null;
+      if (btn) { btn.disabled = true; btn.textContent = "Describing…"; }
+      try {
+        var r = await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "/describe", {});
+        if (input) input.value = r.alt || "";
+        if (currentMedia[i]) currentMedia[i].alt = r.alt || "";
+      } catch (e) { eNote(e.message, "warn"); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = "Describe"; } }
+    }
+
+    async function removePhoto(i) {
+      if (!currentDraftId) return;
+      eNote("Removing…", "busy");
+      try {
+        var r = await fetch("/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i, { method: "DELETE" });
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+        fillEditor(data);
+        eNote("Removed.", "ok");
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    // Preview
+    function renderPreview() {
+      document.getElementById("pvText").textContent = document.getElementById("ePost").value;
+      document.getElementById("pvName").textContent = profile.name || "You";
+      var av = document.getElementById("pvAv");
+      if (profile.picture) {
+        av.innerHTML = "";
+        var avImg = document.createElement("img");
+        avImg.src = profile.picture;
+        avImg.alt = profile.name || "profile photo";
+        av.appendChild(avImg);
+      } else {
+        av.textContent = "VN";
+      }
+      var box = document.getElementById("pvImgs");
+      box.innerHTML = "";
+      var onlyImages = currentMedia.every(function (m) { return m.kind !== "video"; });
+      box.className = "pv-imgs" + (onlyImages && currentMedia.length >= 2 ? " two" : "");
+      currentMedia.forEach(function (m, i) {
+        var el;
+        if (m.kind === "video") {
+          el = document.createElement("video");
+          el.src = mediaUrl(i);
+          el.controls = true;
+        } else {
+          el = document.createElement("img");
+          el.src = mediaUrl(i);
+          el.alt = m.alt || ("photo " + (i + 1));
+        }
+        box.appendChild(el);
+      });
+    }
+    document.getElementById("ePreviewBtn").addEventListener("click", function () {
+      renderPreview();
+      document.getElementById("pvOverlay").hidden = false;
+    });
+    document.getElementById("pvClose").addEventListener("click", function () { document.getElementById("pvOverlay").hidden = true; });
+    document.getElementById("pvOverlay").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !document.getElementById("pvOverlay").hidden) document.getElementById("pvOverlay").hidden = true;
+    });
+    document.getElementById("ePost").addEventListener("input", function () {
+      if (!document.getElementById("pvOverlay").hidden) renderPreview();
+    });
+
+    document.getElementById("ePublish").addEventListener("click", async function () {
+      if (!currentDraftId) return;
+      if (!window.confirm("Publish draft " + currentDraftId + " in this demo? Nothing is actually sent to LinkedIn.")) return;
+      this.disabled = true;
+      ePubNote("Publishing to LinkedIn…", "busy");
+      try {
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveDraft(); }
+        var r = await postJSON("/api/drafts/" + encodeURIComponent(currentDraftId) + "/publish", {});
+        fillEditor(r.draft);
+        if (r.ok) { ePubNote("Posted (demo, nothing was sent).", "ok"); }
+        else { ePubNote(r.error || "Publish failed.", "warn"); }
+        load();
+      } catch (e) { ePubNote(e.message, "warn"); this.disabled = false; }
+    });
+
+    // Version history: list, compare side by side, restore.
+    async function loadVersions(id) {
+      var box = document.getElementById("versions");
+      if (!id) { box.innerHTML = '<p class="empty">Save the draft to start its history.</p>'; return; }
+      try {
+        var r = await getJSON("/api/drafts/" + encodeURIComponent(id) + "/versions");
+        var vs = r.versions || [];
+        if (!vs.length) { box.innerHTML = '<p class="empty">No versions yet.</p>'; return; }
+        box.innerHTML = vs.slice().reverse().map(function (v, ri) {
+          var isCurrent = ri === 0;
+          var who = v.who === "auto" ? "auto" : "you";
+          var actions = isCurrent
+            ? '<span class="vtag cur">current</span>'
+            : '<button class="mini" data-view="' + v.index + '">View</button>' +
+              '<button class="mini" data-restore="' + v.index + '">Restore</button>';
+          return '<div class="vitem"><div class="vmain"><div class="vlabel">' + esc(v.label) +
+            ' <span class="vtag ' + who + '">' + who + '</span></div><div class="vtime">' +
+            new Date(v.at).toLocaleString() + '</div></div><div class="vact">' + actions + "</div></div>";
+        }).join("");
+        Array.prototype.forEach.call(box.querySelectorAll("[data-view]"), function (b) {
+          b.addEventListener("click", function () { openCompare(id, parseInt(this.dataset.view, 10)); });
+        });
+        Array.prototype.forEach.call(box.querySelectorAll("[data-restore]"), function (b) {
+          b.addEventListener("click", function () { restoreVersion(id, parseInt(this.dataset.restore, 10)); });
+        });
+      } catch (e) { box.innerHTML = '<p class="empty">Could not load history.</p>'; }
+    }
+
+    // Word-level diff via LCS. Deletions (only in the old text) and insertions (only in the
+    // new text) are marked so each column highlights what changed.
+    function diffTokens(a, b) {
+      var n = a.length, m = b.length;
+      if (n > 2000 || m > 2000) return null; // fall back to plain for very long texts
+      var dp = [];
+      for (var i = 0; i <= n; i++) dp.push(new Array(m + 1).fill(0));
+      for (var i = n - 1; i >= 0; i--) {
+        for (var j = m - 1; j >= 0; j--) {
+          dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
+      }
+      var ops = [], i = 0, j = 0;
+      while (i < n && j < m) {
+        if (a[i] === b[j]) { ops.push({ t: "eq", v: a[i] }); i++; j++; }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ t: "del", v: a[i] }); i++; }
+        else { ops.push({ t: "ins", v: b[j] }); j++; }
+      }
+      while (i < n) { ops.push({ t: "del", v: a[i] }); i++; }
+      while (j < m) { ops.push({ t: "ins", v: b[j] }); j++; }
+      return ops;
+    }
+    function renderDiff(oldText, newText) {
+      var a = oldText.split(/(\s+)/), b = newText.split(/(\s+)/);
+      var ops = diffTokens(a, b);
+      if (!ops) return { oldHtml: esc(oldText), newHtml: esc(newText) };
+      var oldHtml = "", newHtml = "";
+      ops.forEach(function (op) {
+        var safe = esc(op.v);
+        if (op.t === "eq") { oldHtml += safe; newHtml += safe; }
+        else if (op.t === "del") { oldHtml += '<span class="del">' + safe + "</span>"; }
+        else { newHtml += '<span class="ins">' + safe + "</span>"; }
+      });
+      return { oldHtml: oldHtml, newHtml: newHtml };
+    }
+
+    async function openCompare(id, index) {
+      try {
+        var v = await getJSON("/api/drafts/" + encodeURIComponent(id) + "/versions/" + index);
+        if (v.error) throw new Error(v.error);
+        document.getElementById("cmpSub").textContent = v.label + " · " + new Date(v.at).toLocaleString();
+        var oldFull = (v.title ? v.title + "\n\n" : "") + v.body;
+        var curTitle = document.getElementById("eTitle").value;
+        var newFull = (curTitle ? curTitle + "\n\n" : "") + document.getElementById("ePost").value;
+        var d = renderDiff(oldFull, newFull);
+        document.getElementById("cmpOld").innerHTML = d.oldHtml;
+        document.getElementById("cmpNew").innerHTML = d.newHtml;
+        document.getElementById("cmpRestore").onclick = function () { restoreVersion(id, index); };
+        document.getElementById("cmpOverlay").hidden = false;
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    async function restoreVersion(id, index) {
+      if (!window.confirm("Restore this earlier version? Your current text is replaced (the current state stays in history).")) return;
+      try {
+        var detail = await postJSON("/api/drafts/" + encodeURIComponent(id) + "/versions/" + index + "/restore", {});
+        document.getElementById("cmpOverlay").hidden = true;
+        fillEditor(detail);
+        load();
+      } catch (e) { eNote(e.message, "warn"); }
+    }
+
+    document.getElementById("cmpClose").addEventListener("click", function () { document.getElementById("cmpOverlay").hidden = true; });
+    document.getElementById("cmpOverlay").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !document.getElementById("cmpOverlay").hidden) document.getElementById("cmpOverlay").hidden = true;
+    });
+
+    // Clicking a draft or queue item loads it into the editor.
+    ["drafts", "queue"].forEach(function (id) {
+      document.getElementById(id).addEventListener("click", function (e) {
+        var el = e.target.closest("[data-id]");
+        if (el) openEditor(el.getAttribute("data-id"));
+      });
+    });
+
+    document.getElementById("refBtn").addEventListener("click", async function (e) {
+      e.stopPropagation(); // the compose header toggles collapse; keep this button independent
+      var pre = document.getElementById("reference");
+      var btn = this;
+      if (!pre.hidden) { pre.hidden = true; btn.textContent = "View reference"; return; }
+      var r = await getJSON("/api/reference");
+      pre.textContent = r.exists ? r.content : "No reference yet. Run ingest to build it.";
+      pre.hidden = false;
+      btn.textContent = "Hide reference";
+    });
+
+    // Stepper: scroll to a section; the ingest/brainstorm steps also expand the compose card.
+    Array.prototype.forEach.call(document.querySelectorAll(".step[data-scroll]"), function (step) {
+      step.addEventListener("click", function () {
+        if (this.dataset.scroll === "newPost") setComposeCollapsed(false);
+        var target = document.getElementById(this.dataset.scroll);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        Array.prototype.forEach.call(document.querySelectorAll(".step"), function (s) { s.classList.remove("active"); });
+        this.classList.add("active");
+      });
+    });
+
+    // Terminal: poll the activity feed and append new lines, keeping the view pinned to the
+    // bottom unless the user has scrolled up.
+    var termLastSeq = 0;
+    async function pollActivity() {
+      try {
+        var r = await getJSON("/api/activity?after=" + termLastSeq);
+        if (r.last != null && r.last < termLastSeq) { // server restarted: start over
+          termLastSeq = 0;
+          document.getElementById("termOut").innerHTML = "";
+          r = await getJSON("/api/activity?after=0");
+        }
+        var out = document.getElementById("termOut");
+        if (r.entries && r.entries.length) {
+          var ph = out.querySelector(".empty"); if (ph) ph.remove();
+          var atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 8;
+          r.entries.forEach(function (e) {
+            var line = document.createElement("div");
+            line.innerHTML = '<span class="term-ts">' + esc(e.ts) + "</span>" + esc(e.text);
+            out.appendChild(line);
+          });
+          termLastSeq = r.last;
+          while (out.children.length > 300) out.removeChild(out.firstChild);
+          if (atBottom) out.scrollTop = out.scrollHeight;
+          document.getElementById("termCount").textContent = termLastSeq + " events";
+        } else if (r.last != null) {
+          termLastSeq = Math.max(termLastSeq, r.last);
+        }
+      } catch (e) { /* server unreachable; ignore */ }
+    }
+    document.getElementById("termHead").addEventListener("click", function () {
+      var p = document.getElementById("terminalPanel");
+      p.classList.toggle("collapsed");
+      document.getElementById("termCaret").innerHTML = p.classList.contains("collapsed") ? "&#9656;" : "&#9662;";
+    });
+
+    resetEditor();
+    load();
+    loadIdeas();
+    loadSettings();
+    loadProfile();
+    pollActivity();
+    setInterval(pollActivity, 2000);
+  </script>
+</body>
+</html>
