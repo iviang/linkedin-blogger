@@ -262,8 +262,6 @@
   .pv-actions { display: flex; justify-content: space-around; padding: 9px 0; border-top: 1px solid var(--line); color: var(--faint); font-size: 12.5px; font-weight: 600; }
 </style>
 <style>
-  /* Demo build: media upload and AI vision are turned off (no server, no API keys). */
-  .media { display: none !important; }
   .demo-badge { font: 600 9px/1 var(--mono); letter-spacing: .09em; background: var(--warn-bg);
                 color: var(--warn-ink); padding: 2px 6px; border-radius: 5px; vertical-align: middle;
                 margin-left: 6px; }
@@ -335,6 +333,7 @@
           <div id="skeletonStep" hidden>
             <label class="dirlabel" for="direction">Direction for the draft (optional)</label>
             <textarea class="dir" id="direction" rows="2" placeholder="Any angle, emphasis, or tone to steer the skeleton"></textarea>
+            <p class="note" style="margin: 6px 0 0;">Demo note: the skeleton is fixed, so anything you write here will not change the output.</p>
             <button class="btn primary" id="skeletonBtn" disabled>3 &middot; Create skeleton draft</button>
           </div>
         </div>
@@ -469,16 +468,49 @@
 // It intercepts window.fetch and answers every /api/* call the UI makes from in-memory state,
 // so the whole page can be dropped onto a website as a sandbox. Refreshing resets everything.
 //
-// This file is authored so it can be unit-tested in Node (it exports createMock) and also
-// inlined verbatim into demo.html, where installMock() overrides window.fetch.
+// Authored so it can be unit-tested in Node (it exports createMock) and inlined verbatim into
+// demo.html, where installMock() overrides window.fetch.
 (function (root) {
   var QUEUE_LOCK_MINUTES = 15;
   var SAME_DAY_MIN_LEAD_MINUTES = 30;
   var MAX_WORDS = 220;
 
+  // Six fixed ideas. Brainstorm shows all six; Reshuffle only reorders these same six.
+  var IDEAS = [
+    { title: "What I learned shipping a cancel button",
+      angle: "A small feature with an outsized lesson about giving people an undo.",
+      rationale: "Concrete, recent, and shows product judgment, not just code." },
+    { title: "Scheduling is a promise, so guard it",
+      angle: "Why I put a 30-minute floor on same-day posts.",
+      rationale: "Turns a tiny rule into a point about respecting people's time." },
+    { title: "Why my side project has no database yet",
+      angle: "Choosing boring, local-first storage on purpose.",
+      rationale: "A mild contrarian take that tends to spark comments." },
+    { title: "The bug a test caught before I did",
+      angle: "A near-miss and the habit that saved me.",
+      rationale: "Honest, a little vulnerable, and ends on something useful." },
+    { title: "From localhost to a live demo",
+      angle: "Making a private tool safe to show the world.",
+      rationale: "Ties directly to what visitors are looking at right now." },
+    { title: "Building in public, one commit at a time",
+      angle: "How a personal tool slowly becomes a portfolio.",
+      rationale: "Invites engagement and frames ongoing work as a story." },
+  ];
+
+  // Seeded skeleton carries a couple of intentional issues (a lowercase 'i', a bare percentage)
+  // plus the [YOUR VOICE] gaps, so the very first error check has real, clickable findings.
+  var SKELETON =
+    "I just shipped a small thing, and honestly i think it taught me more than the code did.\n\n" +
+    "[YOUR VOICE: what was the feature, in one plain sentence?]\n\n" +
+    "The interesting part was the moment it clicked: [YOUR VOICE: the insight].\n\n" +
+    "It felt like a 100% improvement in how I work, even though the change was tiny.\n\n" +
+    "[YOUR VOICE: one honest takeaway a reader could use themselves.]\n\n" +
+    "What small change taught you something out of proportion to its size?";
+
   function createMock() {
+    var twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString();
     var store = {
-      profile: { name: "Jordan Lee", picture: null },
+      profile: { name: "Vivian Nguyen", picture: null },
       settings: { post_interval_days: 7 },
       reference:
         "DEMO REFERENCE (sample activity, nothing real)\n\n" +
@@ -489,7 +521,9 @@
         "This reference is canned for the demo. In the real tool it is built from your GitHub\n" +
         "activity and notes since your last published post.",
       referenceGeneratedAt: new Date().toISOString(),
-      lastPostedAt: null,
+      // A prior post already exists, so the Next nudge figure is a real number and it moves
+      // when the posting interval changes.
+      lastPostedAt: twoDaysAgo,
       session: { ideas: [], selected_index: null, comments: "" },
       activity: [],
       activitySeq: 0,
@@ -497,37 +531,6 @@
       drafts: {},
       idSeq: 0,
     };
-
-    var IDEAS_A = [
-      { title: "What I learned shipping a cancel button",
-        angle: "A small feature with an outsized lesson about giving users an undo.",
-        rationale: "Concrete, recent, and shows product judgment, not just code." },
-      { title: "Scheduling is a promise, so guard it",
-        angle: "Why I added a 30-minute floor on same-day posts.",
-        rationale: "Turns a tiny rule into a point about respecting people's time." },
-      { title: "Building in public, one commit at a time",
-        angle: "How a personal tool becomes a portfolio.",
-        rationale: "Invites engagement and frames ongoing work as a story." },
-    ];
-    var IDEAS_B = [
-      { title: "The bug I almost shipped",
-        angle: "A near-miss that a test caught, and what it taught me.",
-        rationale: "Vulnerability plus a lesson reads well and feels honest." },
-      { title: "Why my side project has no database yet",
-        angle: "Choosing boring, local-first storage on purpose.",
-        rationale: "A contrarian take that sparks comments." },
-      { title: "From localhost to a live demo",
-        angle: "Making a private tool safe to show the world.",
-        rationale: "Ties directly to what you are doing right now." },
-    ];
-
-    var SKELETON =
-      "I just shipped a small thing that taught me a big lesson.\n\n" +
-      "[YOUR VOICE: what was the feature, in one plain sentence?]\n\n" +
-      "The interesting part was not the code. It was realizing that " +
-      "[YOUR VOICE: the insight, the moment it clicked for you].\n\n" +
-      "[YOUR VOICE: one honest takeaway a reader could use themselves.]\n\n" +
-      "What is a small feature that taught you something out of proportion to its size?";
 
     function pad(n) { return String(n).padStart(2, "0"); }
     function nowDate() { return new Date(); }
@@ -563,7 +566,6 @@
       return { editable: true, reason: "" };
     }
 
-    // A same-day explicit time must clear the lead window. Errors carry an http status.
     function assertMinLead(iso) {
       var now = nowDate(), when = new Date(iso);
       if (when.toDateString() !== now.toDateString()) return;
@@ -587,28 +589,69 @@
       d.versions.push({ label: label, at: new Date().toISOString(), who: who, title: d.idea_title || "", body: d.body });
     }
 
-    function runCheck(d) {
-      var flags = [];
-      if (hasGaps(d.body))
-        flags.push({ id: "formatting-gaps", category: "formatting", noOverride: true,
-          message: "Fill every [YOUR VOICE: ...] gap in your own words, then run the check again." });
-      flags.push({ id: "grammar-1", category: "grammar",
-        message: "Second sentence: 'its' reads as a possessive here. It should be the contraction 'it's'.",
-        excerpt: "its been a small change", suggestion: "it's been a small change" });
-      flags.push({ id: "factualness-1", category: "factualness",
-        message: "The reference does not support a specific percentage. Soften or cite it before publishing.",
-        excerpt: "a 30% improvement" });
-      recomputePassed({ flags: flags });
-      return { passed: flags.filter(openFlag).length === 0, flags: flags };
-    }
+    // Heuristic error check. It scans the ACTUAL draft body so every finding's excerpt is a real
+    // substring (the editor can highlight it) and re-running after edits reflects the new text.
+    // It is not the platform's Claude-backed check (no API in a static demo), but it mirrors its
+    // shape: same categories, excerpts, suggested fixes, and every flag is overrideable.
     function openFlag(f) { return !f.overridden && !f.accepted; }
     function recomputePassed(check) { check.passed = (check.flags || []).filter(openFlag).length === 0; }
+    function runCheck(d) {
+      var body = d.body || "";
+      var flags = [];
+      var seq = { grammar: 0, formatting: 0, factualness: 0 };
+      function add(cat, message, excerpt, suggestion) {
+        seq[cat] += 1;
+        var f = { id: cat + "-" + seq[cat], category: cat, message: message };
+        if (excerpt) f.excerpt = excerpt;
+        if (suggestion) f.suggestion = suggestion;
+        flags.push(f);
+      }
+      function first(re) { var m = body.match(re); return m ? m[0] : null; }
 
+      // Formatting: unfilled skeleton gaps (one flag per gap, capped).
+      var gaps = body.match(/\[YOUR VOICE:[^\]]*\]/g) || [];
+      gaps.slice(0, 3).forEach(function (g) {
+        add("formatting", "Unfilled [YOUR VOICE] gap. Replace it with your own words before publishing.", g);
+      });
+
+      // Grammar
+      var lc = first(/\bi\s+[a-z]+/);            // lowercase standalone "i"
+      if (lc) add("grammar", "Lowercase 'i' should be capitalized.", lc, lc.replace(/^i\b/, "I"));
+      var dup = first(/\b(\w+)\s+\1\b/i);         // repeated word
+      if (dup) add("grammar", "Repeated word.", dup, dup.split(/\s+/)[0]);
+      var alot = first(/\balot\b/i);
+      if (alot) add("grammar", "'alot' is not a word.", alot, "a lot");
+
+      // Formatting (house style)
+      var caps = first(/\b[A-Z]{4,}\b/);
+      if (caps) add("formatting", "All-caps reads as shouting on LinkedIn.", caps, caps.charAt(0) + caps.slice(1).toLowerCase());
+      var dash = first(/[^\n]{0,12}—[^\n]{0,12}/);   // em dash with context
+      if (dash) add("formatting", "Avoid em dashes; use a comma or split the sentence.", dash, dash.replace(/—/g, ", "));
+      var curly = first(/[^\n]{0,10}[‘’“”][^\n]{0,10}/);
+      if (curly) add("formatting", "Use straight quotes, not curly ones.", curly,
+        curly.replace(/[‘’]/g, "'").replace(/[“”]/g, '"'));
+
+      // Factualness
+      var pct = first(/\b\d{1,3}%/);
+      if (pct) add("factualness", "Verify this figure against your source; the demo cannot check it.", pct);
+      var money = first(/\$\d[\d,]*/);
+      if (money) add("factualness", "Verify this amount against your source.", money);
+      var claim = first(/\b(guaranteed|the best|first ever|never|always|everyone|nobody)\b/i);
+      if (claim) add("factualness", "Strong claim. Make sure your source supports it, or soften it.", claim);
+
+      var check = { passed: true, flags: flags };
+      recomputePassed(check);
+      return check;
+    }
+
+    function mediaOut(d) {
+      return (d.media || []).map(function (m) { return { alt: m.alt || "", kind: m.kind, url: m.url || "", warnings: [] }; });
+    }
     function detail(d) {
       var es = editState(d);
       return {
         id: d.id, status: d.status, title: d.idea_title || "", body: d.body,
-        scheduled_at: d.scheduled_at || null, media: [], media_warnings: [],
+        scheduled_at: d.scheduled_at || null, media: mediaOut(d), media_warnings: [],
         check: d.check || null,
         check_stale: d.check ? d.checkBody !== d.body : false,
         has_gaps: hasGaps(d.body),
@@ -627,24 +670,13 @@
         var d = store.drafts[id];
         return { id: d.id, status: d.status, title: d.idea_title || "",
           preview: (d.body || "").replace(/\n/g, " ").slice(0, 140),
-          scheduled_at: d.scheduled_at || null, media_count: 0, words: words(d.body) };
+          scheduled_at: d.scheduled_at || null, media_count: (d.media || []).length, words: words(d.body) };
       });
     }
 
     var QUEUE = { queued: 1, approved: 1, failed: 1 };
     var DONE = { posted: 1, posting: 1 };
 
-    // Seed one queued and one plain draft so the dashboard is not empty on first load.
-    function seed() {
-      var a = makeDraft({ status: "pending", flow: "stage_b", idea_title: "What I learned shipping a cancel button",
-        body: "Giving people an undo changed how I think about small features.\n\nA cancel button is not glamorous, but it turns a scary action into a safe one. I shipped one this week and it reframed the whole flow for me.\n\nWhat is the smallest feature that changed how you build?" });
-      a.check = { passed: true, flags: [] }; a.checkBody = a.body;
-      var b = makeDraft({ status: "queued", flow: "stage_b", idea_title: "Scheduling is a promise",
-        body: "If a tool lets you schedule something, it owes you a little protection from yourself.\n\nI added a 30-minute floor on same-day posts so a slip of the finger can never fire a post two minutes from now. Small guardrails, fewer regrets.\n\nWhat guardrail has saved you from your own haste?" });
-      b.check = { passed: true, flags: [] }; b.checkBody = b.body;
-      b.scheduled_at = defaultSchedule(b.id);
-      log("demo: sandbox ready, nothing here is sent to LinkedIn");
-    }
     function makeDraft(fields) {
       var id = newId();
       var d = { id: id, status: "pending", flow: undefined, idea_title: "", body: "",
@@ -655,10 +687,29 @@
       recordVersion(d, "Draft created", "auto");
       return d;
     }
+    // Seed a clean draft and a queued one so the dashboard is not empty on first load.
+    function seed() {
+      var a = makeDraft({ status: "pending", flow: "stage_b", idea_title: "What I learned shipping a cancel button",
+        body: "Giving people an undo changed how I think about small features.\n\nA cancel button is not glamorous, but it turns a scary action into a safe one. I shipped one this week and it reframed the whole flow for me.\n\nWhat is the smallest feature that changed how you build?" });
+      a.check = { passed: true, flags: [] }; a.checkBody = a.body;
+      var b = makeDraft({ status: "queued", flow: "stage_b", idea_title: "Scheduling is a promise",
+        body: "If a tool lets you schedule something, it owes you a little protection from yourself.\n\nI added a thirty-minute floor on same-day posts so a slip of the finger can never fire a post two minutes from now. Small guardrails, fewer regrets.\n\nWhat guardrail has saved you from your own haste?" });
+      b.check = { passed: true, flags: [] }; b.checkBody = b.body;
+      b.scheduled_at = defaultSchedule(b.id);
+      log("demo: sandbox ready, nothing here is sent to LinkedIn");
+    }
+
+    function shuffled(arr) {
+      var a = arr.slice();
+      for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+      return a;
+    }
 
     // ---- request router ----
     function J(data, status) { return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json" } }); }
     function need(id) { var d = store.drafts[id]; if (!d) throw { status: 404, message: "No draft with that id." }; return d; }
+    function isFormData(b) { return b && typeof b === "object" && typeof b.getAll === "function"; }
+    function revoke(url) { try { if (url && root.URL && root.URL.revokeObjectURL) root.URL.revokeObjectURL(url); } catch (e) {} }
 
     function route(rawUrl, opts) {
       opts = opts || {};
@@ -670,7 +721,6 @@
       if (opts.body && typeof opts.body === "string") { try { body = JSON.parse(opts.body); } catch (e) { body = {}; } }
 
       try {
-        // static reads
         if (path === "/api/status" && method === "GET") {
           var items = listDrafts();
           var inDrafts = items.filter(function (x) { return !QUEUE[x.status] && !DONE[x.status]; });
@@ -703,16 +753,15 @@
           return J({ post_interval_days: days });
         }
 
-        // generation flow
         if (path === "/api/ingest" && method === "POST") {
           store.referenceGeneratedAt = new Date().toISOString();
           log("ingest: rebuilt the reference from sample activity (demo)");
-          return J({ ok: true, since: null, reference_chars: store.reference.length });
+          return J({ ok: true, since: store.lastPostedAt, reference_chars: store.reference.length });
         }
         if (path === "/api/brainstorm" && method === "POST") {
-          var set = body.reshuffle ? IDEAS_B : IDEAS_A;
-          store.session = { ideas: set.slice(), selected_index: null, comments: "" };
-          log("brainstorm: proposed " + set.length + " ideas (demo)");
+          var set = body.reshuffle ? shuffled(IDEAS) : IDEAS.slice();
+          store.session = { ideas: set, selected_index: null, comments: "" };
+          log("brainstorm: " + (body.reshuffle ? "reshuffled" : "proposed") + " " + set.length + " ideas (demo)");
           return J({ ideas: store.session.ideas, selected_index: null });
         }
         if (path === "/api/ideas" && method === "GET")
@@ -732,7 +781,6 @@
           return J({ id: d.id, body: d.body });
         }
 
-        // draft CRUD and actions
         if (path === "/api/drafts/new" && method === "POST") {
           var nd = makeDraft({ status: "pending", idea_title: (body.title || "").trim(), body: body.body || "" });
           log("new: freestyle draft " + nd.id + " created (demo)");
@@ -757,6 +805,7 @@
           if (tail === "" && method === "DELETE") {
             var dd = need(id);
             if (DONE[dd.status]) return J({ error: "A posted draft cannot be deleted here." }, 400);
+            (dd.media || []).forEach(function (mm) { revoke(mm.url); });
             delete store.drafts[id]; store.order = store.order.filter(function (x) { return x !== id; });
             log("delete: " + id + " removed (demo)");
             return J({ ok: true });
@@ -767,7 +816,7 @@
             dc.check = runCheck(dc); dc.checkBody = dc.body;
             if (dc.check.passed && dc.status === "skeleton") dc.status = "pending";
             recordVersion(dc, dc.check.passed ? "Error check passed" : "Error check flagged issues", "auto");
-            log("check: " + (dc.check.passed ? "passed" : "found issues") + " on " + id + " (demo)");
+            log("check: " + (dc.check.passed ? "passed" : dc.check.flags.filter(openFlag).length + " open flag(s)") + " on " + id + " (demo)");
             return J(detail(dc));
           }
           if (tail === "/override" && method === "POST") {
@@ -775,7 +824,6 @@
             if (!doo.check) return J({ error: "Run the check first." }, 400);
             var f = (doo.check.flags || []).filter(function (x) { return x.id === body.flag_id; })[0];
             if (!f) return J({ error: "No such flag." }, 400);
-            if (f.noOverride) return J({ error: "This flag cannot be overridden; edit the draft to resolve it." }, 400);
             f.overridden = true; recomputePassed(doo.check);
             if (doo.check.passed && doo.status === "skeleton") doo.status = "pending";
             recordVersion(doo, "Overrode " + body.flag_id, "you");
@@ -821,8 +869,7 @@
             if (!QUEUE[ds.status] && ds.flow === "stage_b") {
               var rr = readyForApprove(ds); if (!rr[0]) return J({ error: rr[1] }, 400);
             }
-            var when = body.scheduled_at;
-            var scheduled;
+            var when = body.scheduled_at, scheduled;
             if (when) { assertMinLead(when); scheduled = isoOffset(new Date(when)); }
             else { scheduled = defaultSchedule(id); }
             ds.status = "queued"; ds.scheduled_at = scheduled;
@@ -844,14 +891,50 @@
             if (dp.status === "skeleton") return J({ error: "Fill the gaps and run check before publishing." }, 400);
             if (dp.flow === "stage_b") { var rp = readyForApprove(dp); if (!rp[0]) return J({ error: rp[1] }, 400); }
             if (words(dp.body) > MAX_WORDS) return J({ error: "Draft is " + words(dp.body) + " words, over the " + MAX_WORDS + "-word limit. Trim it before publishing." }, 400);
-            dp.status = "posted"; dp.scheduled_at = dp.scheduled_at || null;
+            dp.status = "posted";
             dp.posted_urn = "urn:li:share:DEMO" + store.idSeq; store.lastPostedAt = new Date().toISOString();
             recordVersion(dp, "Published (demo)", "auto");
             log("publish: " + id + " pretend-posted, nothing left the page (demo)");
             return J({ ok: true, error: null, draft: detail(dp) });
           }
-          // media endpoints are disabled in the demo
-          if (tail.indexOf("/media") === 0) return J({ error: "Photo upload is turned off in the demo." }, 400);
+
+          // Media, backed by in-browser object URLs (no upload leaves the page).
+          if (tail === "/media" && method === "POST") {
+            var dm = need(id); var esm = editState(dm); if (!esm.editable) return J({ error: esm.reason }, 400);
+            var files = isFormData(opts.body) ? opts.body.getAll("file") : [];
+            files = files.filter(function (x) { return x && x.name; });
+            if (!files.length) return J({ error: "No file selected." }, 400);
+            files.forEach(function (fl) {
+              var kind = (fl.type || "").indexOf("video") === 0 ? "video" : "image";
+              var url = (root.URL && root.URL.createObjectURL) ? root.URL.createObjectURL(fl) : "";
+              dm.media.push({ alt: "", kind: kind, url: url });
+            });
+            log("media: added " + files.length + " file(s) to " + id + " (demo)");
+            return J(detail(dm));
+          }
+          var mi = tail.match(/^\/media\/(\d+)$/);
+          if (mi && method === "DELETE") {
+            var dmd = need(id); var ix = parseInt(mi[1], 10);
+            if (ix < 0 || ix >= dmd.media.length) return J({ error: "No item at that position." }, 404);
+            revoke(dmd.media[ix].url); dmd.media.splice(ix, 1);
+            return J(detail(dmd));
+          }
+          var ma = tail.match(/^\/media\/(\d+)\/alt$/);
+          if (ma && method === "POST") {
+            var dma = need(id); var ia = parseInt(ma[1], 10);
+            if (ia < 0 || ia >= dma.media.length) return J({ error: "No photo at that position." }, 404);
+            dma.media[ia].alt = (body.alt || "").trim();
+            return J(detail(dma));
+          }
+          var md = tail.match(/^\/media\/(\d+)\/describe$/);
+          if (md && method === "POST") {
+            var dmc = need(id); var idx2 = parseInt(md[1], 10);
+            if (idx2 < 0 || idx2 >= dmc.media.length) return J({ error: "No photo at that position." }, 404);
+            var alt = "A screenshot from the project (demo alt text; the real tool writes this with Claude vision).";
+            dmc.media[idx2].alt = alt;
+            return J({ index: idx2, alt: alt });
+          }
+          if (tail.indexOf("/media") === 0) return J({ error: "Not found (demo)." }, 404);
         }
 
         if (path === "/api/publish" && method === "POST") {
@@ -1539,7 +1622,8 @@ window.__DEMO_MOCK__.installMock();
 
     // Photos
     function mediaUrl(i) {
-      return "/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "?t=" + Date.now();
+      return (currentMedia[i] && currentMedia[i].url) ? currentMedia[i].url
+        : "/api/drafts/" + encodeURIComponent(currentDraftId) + "/media/" + i + "?t=" + Date.now();
     }
     function renderGallery(ro) {
       var g = document.getElementById("eGallery");
